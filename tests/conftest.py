@@ -88,6 +88,7 @@ def vault_config() -> VaultConfig:
         jwt_audience="ledgix-sdk",
         agent_id="test-agent",
         session_id="test-session",
+        max_retries=0,
     )
 
 
@@ -102,6 +103,22 @@ def vault_config_with_jwt() -> VaultConfig:
         jwt_audience="ledgix-sdk",
         agent_id="test-agent",
         session_id="test-session",
+        max_retries=0,
+    )
+
+
+@pytest.fixture
+def vault_config_retry() -> VaultConfig:
+    """Config with retries enabled and zero backoff delay for fast retry tests."""
+    return VaultConfig(
+        vault_url="https://vault.test",
+        vault_api_key="test-api-key",
+        vault_timeout=5.0,
+        verify_jwt=False,
+        agent_id="test-agent",
+        session_id="test-session",
+        max_retries=2,
+        retry_base_delay=0.0,
     )
 
 

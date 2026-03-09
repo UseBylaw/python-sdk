@@ -4,11 +4,15 @@
 from __future__ import annotations
 
 import json
+import random
 import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
 import jwt
+
+_RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({429, 500, 502, 503, 504})
 
 from .config import VaultConfig
 from .exceptions import (
@@ -75,6 +79,66 @@ class LedgixClient:
         return self._async_client
 
     # ------------------------------------------------------------------
+    # Retry helpers
+    # ------------------------------------------------------------------
+
+    def _backoff_delay(self, attempt: int) -> float:
+        """Exponential backoff with full jitter, capped at 30 seconds."""
+        delay = min(30.0, self.config.retry_base_delay * (2 ** attempt))
+        return random.uniform(0.0, delay)
+
+    def _sync_retry(self, fn: Callable[[], httpx.Response]) -> httpx.Response:
+        """Execute an HTTP callable with retry and exponential backoff.
+
+        Retries on ``httpx.TransportError`` (network errors, timeouts) and on
+        retryable HTTP status codes (429, 5xx). Raises ``VaultConnectionError``
+        after all attempts are exhausted.
+        """
+        last_exc: httpx.TransportError | None = None
+        response: httpx.Response | None = None
+        for attempt in range(self.config.max_retries + 1):
+            try:
+                response = fn()
+            except httpx.TransportError as exc:
+                last_exc = exc
+                if attempt < self.config.max_retries:
+                    time.sleep(self._backoff_delay(attempt))
+                    continue
+                raise VaultConnectionError(str(exc)) from exc
+            if response.status_code in _RETRYABLE_STATUS_CODES and attempt < self.config.max_retries:
+                time.sleep(self._backoff_delay(attempt))
+                continue
+            return response
+        if last_exc is not None:
+            raise VaultConnectionError(str(last_exc)) from last_exc
+        assert response is not None
+        return response
+
+    async def _async_retry(self, fn: Callable[[], Awaitable[httpx.Response]]) -> httpx.Response:
+        """Async variant of ``_sync_retry``."""
+        import asyncio
+
+        last_exc: httpx.TransportError | None = None
+        response: httpx.Response | None = None
+        for attempt in range(self.config.max_retries + 1):
+            try:
+                response = await fn()
+            except httpx.TransportError as exc:
+                last_exc = exc
+                if attempt < self.config.max_retries:
+                    await asyncio.sleep(self._backoff_delay(attempt))
+                    continue
+                raise VaultConnectionError(str(exc)) from exc
+            if response.status_code in _RETRYABLE_STATUS_CODES and attempt < self.config.max_retries:
+                await asyncio.sleep(self._backoff_delay(attempt))
+                continue
+            return response
+        if last_exc is not None:
+            raise VaultConnectionError(str(last_exc)) from last_exc
+        assert response is not None
+        return response
+
+    # ------------------------------------------------------------------
     # Clearance — sync
     # ------------------------------------------------------------------
 
@@ -86,13 +150,13 @@ class LedgixClient:
             VaultConnectionError: If the Vault is unreachable.
         """
         try:
-            response = self._get_sync_client().post(
-                "/request-clearance",
-                content=request.model_dump_json(),
+            response = self._sync_retry(
+                lambda: self._get_sync_client().post(
+                    "/request-clearance",
+                    content=request.model_dump_json(),
+                )
             )
             response.raise_for_status()
-        except httpx.ConnectError as exc:
-            raise VaultConnectionError(str(exc)) from exc
         except httpx.HTTPStatusError as exc:
             raise VaultConnectionError(
                 f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
@@ -124,13 +188,13 @@ class LedgixClient:
             VaultConnectionError: If the Vault is unreachable.
         """
         try:
-            response = await self._get_async_client().post(
-                "/request-clearance",
-                content=request.model_dump_json(),
+            response = await self._async_retry(
+                lambda: self._get_async_client().post(
+                    "/request-clearance",
+                    content=request.model_dump_json(),
+                )
             )
             response.raise_for_status()
-        except httpx.ConnectError as exc:
-            raise VaultConnectionError(str(exc)) from exc
         except httpx.HTTPStatusError as exc:
             raise VaultConnectionError(
                 f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
@@ -157,13 +221,13 @@ class LedgixClient:
     def register_policy(self, policy: PolicyRegistration) -> PolicyRegistrationResponse:
         """Register a policy with the Vault (sync)."""
         try:
-            response = self._get_sync_client().post(
-                "/register-policy",
-                content=policy.model_dump_json(),
+            response = self._sync_retry(
+                lambda: self._get_sync_client().post(
+                    "/register-policy",
+                    content=policy.model_dump_json(),
+                )
             )
             response.raise_for_status()
-        except httpx.ConnectError as exc:
-            raise VaultConnectionError(str(exc)) from exc
         except httpx.HTTPStatusError as exc:
             raise PolicyRegistrationError(
                 f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
@@ -174,13 +238,13 @@ class LedgixClient:
     async def aregister_policy(self, policy: PolicyRegistration) -> PolicyRegistrationResponse:
         """Register a policy with the Vault (async)."""
         try:
-            response = await self._get_async_client().post(
-                "/register-policy",
-                content=policy.model_dump_json(),
+            response = await self._async_retry(
+                lambda: self._get_async_client().post(
+                    "/register-policy",
+                    content=policy.model_dump_json(),
+                )
             )
             response.raise_for_status()
-        except httpx.ConnectError as exc:
-            raise VaultConnectionError(str(exc)) from exc
         except httpx.HTTPStatusError as exc:
             raise PolicyRegistrationError(
                 f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
@@ -225,10 +289,10 @@ class LedgixClient:
     def fetch_jwks(self) -> dict[str, Any]:
         """Fetch the Vault's JWKS (JSON Web Key Set) for token verification (sync)."""
         try:
-            response = self._get_sync_client().get("/.well-known/jwks.json")
+            response = self._sync_retry(
+                lambda: self._get_sync_client().get("/.well-known/jwks.json")
+            )
             response.raise_for_status()
-        except httpx.ConnectError as exc:
-            raise VaultConnectionError(str(exc)) from exc
         except httpx.HTTPStatusError as exc:
             raise VaultConnectionError(
                 f"Failed to fetch JWKS: HTTP {exc.response.status_code}"
@@ -240,10 +304,10 @@ class LedgixClient:
     async def afetch_jwks(self) -> dict[str, Any]:
         """Fetch the Vault's JWKS for token verification (async)."""
         try:
-            response = await self._get_async_client().get("/.well-known/jwks.json")
+            response = await self._async_retry(
+                lambda: self._get_async_client().get("/.well-known/jwks.json")
+            )
             response.raise_for_status()
-        except httpx.ConnectError as exc:
-            raise VaultConnectionError(str(exc)) from exc
         except httpx.HTTPStatusError as exc:
             raise VaultConnectionError(
                 f"Failed to fetch JWKS: HTTP {exc.response.status_code}"
@@ -261,37 +325,31 @@ class LedgixClient:
             TokenVerificationError: If the token is invalid, expired, or
                 the JWKS cannot be fetched.
         """
-        return self._verify_token_internal(token, sync=True)
+        if self._jwks_cache is None:
+            self.fetch_jwks()
+        return self._decode_token(token)
 
     async def averify_token(self, token: str) -> dict[str, Any]:
-        """Verify an A-JWT using the Vault's public key (async)."""
-        return self._verify_token_internal(token, sync=False)
+        """Verify an A-JWT using the Vault's public key (async).
 
-    def _verify_token_internal(self, token: str, sync: bool = True) -> dict[str, Any]:
-        """Shared verification logic.
-
-        Note: For async callers this is still synchronous internally
-        because PyJWT is sync. The async variant pre-fetches JWKS
-        asynchronously before calling this.
+        Raises:
+            TokenVerificationError: If the token is invalid, expired, or
+                the JWKS cannot be fetched.
         """
         if self._jwks_cache is None:
-            if sync:
-                self.fetch_jwks()
-            else:
-                # In async context, caller must have pre-fetched JWKS.
-                # Fall back to sync fetch if cache is empty.
-                self.fetch_jwks()
+            await self.afetch_jwks()
+        return self._decode_token(token)
 
+    def _decode_token(self, token: str) -> dict[str, Any]:
+        """Verify an A-JWT against the cached JWKS. JWKS must already be populated."""
         if not self._jwks_cache:
             raise TokenVerificationError("No JWKS available from Vault")
 
         try:
-            # Extract the first key from the JWKS
             jwks = self._jwks_cache
             if "keys" not in jwks or not jwks["keys"]:
                 raise TokenVerificationError("JWKS contains no keys")
 
-            # Build a PyJWT key from the JWK
             key_data = jwks["keys"][0]
             public_key = jwt.algorithms.OKPAlgorithm.from_jwk(json.dumps(key_data))
 
@@ -307,6 +365,8 @@ class LedgixClient:
                 raise TokenVerificationError("Invalid A-JWT: unexpected subject")
             return decoded
 
+        except TokenVerificationError:
+            raise
         except jwt.ExpiredSignatureError as exc:
             raise TokenVerificationError("A-JWT has expired") from exc
         except jwt.InvalidTokenError as exc:

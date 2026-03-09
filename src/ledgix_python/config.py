@@ -49,3 +49,9 @@ class VaultConfig(BaseSettings):
 
     review_timeout: float = 300.0
     """Maximum wait time in seconds for a pending manual review decision."""
+
+    max_retries: int = 3
+    """Number of retry attempts for transient failures (connection errors, 5xx responses)."""
+
+    retry_base_delay: float = 0.5
+    """Base delay in seconds for exponential backoff between retries (full jitter applied)."""

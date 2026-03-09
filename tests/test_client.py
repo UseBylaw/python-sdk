@@ -314,6 +314,100 @@ class TestTokenVerification:
 # ──────────────────────────────────────────────────────────────────────
 
 
+# ──────────────────────────────────────────────────────────────────────
+# Retry behaviour
+# ──────────────────────────────────────────────────────────────────────
+
+
+class TestRetry:
+    """Tests for automatic retry with exponential backoff."""
+
+    @respx.mock
+    def test_retries_on_connection_error_then_succeeds(
+        self, vault_config_retry: VaultConfig, approved_response: dict
+    ):
+        client = LedgixClient(config=vault_config_retry)
+        route = respx.post("https://vault.test/request-clearance").mock(
+            side_effect=[
+                httpx.ConnectError("Connection refused"),
+                httpx.ConnectError("Connection refused"),
+                Response(200, json=approved_response),
+            ]
+        )
+
+        request = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45})
+        result = client.request_clearance(request)
+
+        assert result.approved is True
+        assert route.call_count == 3
+        client.close()
+
+    @respx.mock
+    def test_retries_on_5xx_then_succeeds(
+        self, vault_config_retry: VaultConfig, approved_response: dict
+    ):
+        client = LedgixClient(config=vault_config_retry)
+        respx.post("https://vault.test/request-clearance").mock(
+            side_effect=[
+                Response(503, text="Service Unavailable"),
+                Response(503, text="Service Unavailable"),
+                Response(200, json=approved_response),
+            ]
+        )
+
+        request = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45})
+        result = client.request_clearance(request)
+
+        assert result.approved is True
+        client.close()
+
+    @respx.mock
+    def test_raises_after_exhausting_retries(self, vault_config_retry: VaultConfig):
+        client = LedgixClient(config=vault_config_retry)
+        respx.post("https://vault.test/request-clearance").mock(
+            side_effect=httpx.ConnectError("Connection refused")
+        )
+
+        request = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45})
+        with pytest.raises(VaultConnectionError):
+            client.request_clearance(request)
+        client.close()
+
+    @respx.mock
+    def test_does_not_retry_on_4xx(self, vault_config_retry: VaultConfig):
+        client = LedgixClient(config=vault_config_retry)
+        route = respx.post("https://vault.test/request-clearance").mock(
+            return_value=Response(400, text="Bad Request")
+        )
+
+        request = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45})
+        with pytest.raises(VaultConnectionError):
+            client.request_clearance(request)
+
+        # 400 is not retryable — should only be called once
+        assert route.call_count == 1
+        client.close()
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_async_retries_on_connection_error(
+        self, vault_config_retry: VaultConfig, approved_response: dict
+    ):
+        client = LedgixClient(config=vault_config_retry)
+        respx.post("https://vault.test/request-clearance").mock(
+            side_effect=[
+                httpx.ConnectError("Connection refused"),
+                Response(200, json=approved_response),
+            ]
+        )
+
+        request = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45})
+        result = await client.arequest_clearance(request)
+
+        assert result.approved is True
+        await client.aclose()
+
+
 class TestClientLifecycle:
     """Tests for context manager and close behavior."""
 

@@ -148,17 +148,23 @@ def _extract_tool_args(
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
 ) -> dict[str, Any]:
-    """Best-effort extraction of function arguments as a dict for the clearance request."""
+    """Best-effort extraction of function arguments as a dict for the clearance request.
+
+    Skips ``self``, private parameters (prefixed with ``_``), ``*args``, and
+    ``**kwargs`` captures so only named, user-visible parameters are included.
+    """
     try:
         sig = inspect.signature(func)
         bound = sig.bind_partial(*args, **kwargs)
         bound.apply_defaults()
-        # Filter out internal kwargs
-        return {
-            k: v
-            for k, v in bound.arguments.items()
-            if not k.startswith("_") and k != "self"
-        }
-    except Exception:
-        # Fallback: just return kwargs
+        result: dict[str, Any] = {}
+        for name, value in bound.arguments.items():
+            if name.startswith("_") or name == "self":
+                continue
+            param = sig.parameters[name]
+            if param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+                continue
+            result[name] = value
+        return result
+    except (TypeError, ValueError):
         return {k: v for k, v in kwargs.items() if not k.startswith("_")}
