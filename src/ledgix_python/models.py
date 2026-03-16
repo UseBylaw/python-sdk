@@ -63,3 +63,57 @@ class PolicyRegistrationResponse(BaseModel):
     policy_id: str = Field(..., description="Confirmed policy ID")
     status: str = Field(default="registered", description="Registration status")
     message: str = Field(default="", description="Additional information")
+
+
+class LedgerEntry(BaseModel):
+    """Ledger entry returned by the Vault's ledger endpoints."""
+
+    seq: int
+    request_id: str
+    agent_id: str = ""
+    policy_id: str = ""
+    intent_hash: str = ""
+    tool_name: str
+    tool_args: dict[str, Any] = Field(default_factory=dict)
+    reason: str = ""
+    citations: list[dict[str, Any]] = Field(default_factory=list)
+    evidence_chunks: list[dict[str, Any]] = Field(default_factory=list)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    approved: bool
+    decided_at: str
+    prev_row_hash: str = ""
+    row_hash: str
+    signature_algorithm: str = ""
+    signer_key_id: str = ""
+    row_signature: str = ""
+    receipt_payload: str = ""
+
+
+class LedgerManifest(BaseModel):
+    """Signed chain-head manifest returned by the Vault."""
+
+    period_start: str
+    period_end_exclusive: str
+    generated_at: str
+    head_seq: int
+    head_row_hash: str
+    head_row_signature: str = ""
+    manifest_hash: str
+    prev_manifest_hash: str = ""
+    signature_algorithm: str = ""
+    signer_key_id: str = ""
+    manifest_signature: str = ""
+    manifest_payload: str = ""
+    anchor_uri: str = ""
+    anchored_at: str | None = None
+
+
+class LedgerVerificationResult(BaseModel):
+    """Result of independent offline ledger verification."""
+
+    intact: bool
+    verified_entries: int
+    verified_manifests: int
+    latest_row_hash: str | None = None
+    latest_manifest_hash: str | None = None
+    error: str | None = None

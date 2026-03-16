@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 
 import httpx
@@ -307,6 +309,186 @@ class TestTokenVerification:
         result = client_with_jwt.request_clearance(request)
 
         assert result.approved is True
+
+
+class TestLedgerProofVerification:
+    """Tests for ledger fetch + offline proof verification."""
+
+    @staticmethod
+    def _b64url(value: bytes) -> str:
+        return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
+
+    @respx.mock
+    def test_fetch_ledger_and_manifests(self, client: LedgixClient):
+        respx.get("https://vault.test/ledger?limit=2").mock(
+            return_value=Response(
+                200,
+                json={
+                    "entries": [
+                        {
+                            "seq": 2,
+                            "request_id": "req-2",
+                            "tool_name": "stripe_refund",
+                            "approved": True,
+                            "decided_at": "2026-03-15T12:00:00Z",
+                            "row_hash": "b" * 64,
+                        }
+                    ]
+                },
+            )
+        )
+        respx.get("https://vault.test/ledger/manifests?limit=3").mock(
+            return_value=Response(
+                200,
+                json={
+                    "manifests": [
+                        {
+                            "period_start": "2026-03-15T12:00:00Z",
+                            "period_end_exclusive": "2026-03-15T13:00:00Z",
+                            "generated_at": "2026-03-15T13:00:00Z",
+                            "head_seq": 2,
+                            "head_row_hash": "b" * 64,
+                            "manifest_hash": "sha256:" + ("c" * 64),
+                        }
+                    ]
+                },
+            )
+        )
+
+        entries = client.fetch_ledger(limit=2)
+        manifests = client.fetch_ledger_manifests(limit=3)
+
+        assert len(entries) == 1
+        assert entries[0].request_id == "req-2"
+        assert len(manifests) == 1
+        assert manifests[0].head_seq == 2
+
+    @respx.mock
+    def test_verify_ledger_proof(
+        self,
+        client: LedgixClient,
+        ed25519_private_key,
+        jwks_response: dict,
+    ):
+        row_payload = b'{"client_id":"demo","seq":1,"row_hash":"' + ("a" * 64).encode("ascii") + b'"}'
+        row_signature = ed25519_private_key.sign(row_payload)
+        manifest_payload = (
+            b'{"period_start":"2026-03-15T12:00:00Z","head_seq":1,"head_row_hash":"'
+            + ("a" * 64).encode("ascii")
+            + b'"}'
+        )
+        manifest_signature = ed25519_private_key.sign(manifest_payload)
+        manifest_hash = "sha256:" + hashlib.sha256(manifest_payload).hexdigest()
+
+        respx.get("https://vault.test/.well-known/jwks.json").mock(
+            return_value=Response(200, json=jwks_response)
+        )
+
+        result = client.verify_ledger_proof(
+            entries=[
+                {
+                    "seq": 1,
+                    "request_id": "req-1",
+                    "agent_id": "agent-1",
+                    "policy_id": "policy-1",
+                    "tool_name": "stripe_refund",
+                    "tool_args": {"amount": 45},
+                    "reason": "ok",
+                    "approved": True,
+                    "confidence": 0.91,
+                    "decided_at": "2026-03-15T12:00:00Z",
+                    "prev_row_hash": "0" * 64,
+                    "row_hash": "a" * 64,
+                    "signer_key_id": "test-key-001",
+                    "row_signature": self._b64url(row_signature),
+                    "receipt_payload": self._b64url(row_payload),
+                }
+            ],
+            manifests=[
+                {
+                    "period_start": "2026-03-15T12:00:00Z",
+                    "period_end_exclusive": "2026-03-15T13:00:00Z",
+                    "generated_at": "2026-03-15T13:00:00Z",
+                    "head_seq": 1,
+                    "head_row_hash": "a" * 64,
+                    "head_row_signature": self._b64url(row_signature),
+                    "manifest_hash": manifest_hash,
+                    "prev_manifest_hash": "sha256:" + ("0" * 64),
+                    "signer_key_id": "test-key-001",
+                    "manifest_signature": self._b64url(manifest_signature),
+                    "manifest_payload": self._b64url(manifest_payload),
+                    "anchor_uri": "s3://ledgix-ledger/demo/2026-03-15T13:00:00Z.json",
+                    "anchored_at": "2026-03-15T13:00:30Z",
+                }
+            ],
+        )
+
+        assert result.intact is True
+        assert result.verified_entries == 1
+        assert result.verified_manifests == 1
+        assert result.latest_row_hash == "a" * 64
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_verify_ledger_proof_async(
+        self,
+        client: LedgixClient,
+        ed25519_private_key,
+        jwks_response: dict,
+    ):
+        row_payload = b'{"client_id":"demo","seq":2,"row_hash":"' + ("b" * 64).encode("ascii") + b'"}'
+        row_signature = ed25519_private_key.sign(row_payload)
+        manifest_payload = (
+            b'{"period_start":"2026-03-15T13:00:00Z","head_seq":2,"head_row_hash":"'
+            + ("b" * 64).encode("ascii")
+            + b'"}'
+        )
+        manifest_signature = ed25519_private_key.sign(manifest_payload)
+        manifest_hash = "sha256:" + hashlib.sha256(manifest_payload).hexdigest()
+
+        respx.get("https://vault.test/.well-known/jwks.json").mock(
+            return_value=Response(200, json=jwks_response)
+        )
+
+        result = await client.averify_ledger_proof(
+            entries=[
+                {
+                    "seq": 2,
+                    "request_id": "req-2",
+                    "agent_id": "agent-2",
+                    "policy_id": "policy-2",
+                    "tool_name": "stripe_refund",
+                    "tool_args": {"amount": 60},
+                    "reason": "ok",
+                    "approved": True,
+                    "confidence": 0.88,
+                    "decided_at": "2026-03-15T13:00:00Z",
+                    "prev_row_hash": "0" * 64,
+                    "row_hash": "b" * 64,
+                    "signer_key_id": "test-key-001",
+                    "row_signature": self._b64url(row_signature),
+                    "receipt_payload": self._b64url(row_payload),
+                }
+            ],
+            manifests=[
+                {
+                    "period_start": "2026-03-15T13:00:00Z",
+                    "period_end_exclusive": "2026-03-15T14:00:00Z",
+                    "generated_at": "2026-03-15T14:00:00Z",
+                    "head_seq": 2,
+                    "head_row_hash": "b" * 64,
+                    "head_row_signature": self._b64url(row_signature),
+                    "manifest_hash": manifest_hash,
+                    "prev_manifest_hash": "sha256:" + ("0" * 64),
+                    "signer_key_id": "test-key-001",
+                    "manifest_signature": self._b64url(manifest_signature),
+                    "manifest_payload": self._b64url(manifest_payload),
+                }
+            ],
+        )
+
+        assert result.intact is True
+        assert result.latest_manifest_hash == manifest_hash
 
 
 # ──────────────────────────────────────────────────────────────────────

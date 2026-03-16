@@ -6,8 +6,11 @@ from __future__ import annotations
 import json
 import random
 import time
+import hashlib
+import base64
 from collections.abc import Awaitable, Callable
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
 import jwt
@@ -25,6 +28,9 @@ from .exceptions import (
 from .models import (
     ClearanceRequest,
     ClearanceResponse,
+    LedgerEntry,
+    LedgerManifest,
+    LedgerVerificationResult,
     PolicyRegistration,
     PolicyRegistrationResponse,
 )
@@ -316,6 +322,106 @@ class LedgixClient:
         self._jwks_cache = response.json()
         return self._jwks_cache
 
+    def fetch_ledger(self, limit: int = 100) -> list[LedgerEntry]:
+        """Fetch recent ledger entries for the authenticated tenant (sync)."""
+        query = urlencode({"limit": max(1, min(limit, 500))})
+        try:
+            response = self._sync_retry(lambda: self._get_sync_client().get(f"/ledger?{query}"))
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise VaultConnectionError(
+                f"Failed to fetch ledger: HTTP {exc.response.status_code}"
+            ) from exc
+
+        payload = response.json()
+        return [LedgerEntry.model_validate(item) for item in payload.get("entries", [])]
+
+    async def afetch_ledger(self, limit: int = 100) -> list[LedgerEntry]:
+        """Fetch recent ledger entries for the authenticated tenant (async)."""
+        query = urlencode({"limit": max(1, min(limit, 500))})
+        try:
+            response = await self._async_retry(lambda: self._get_async_client().get(f"/ledger?{query}"))
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise VaultConnectionError(
+                f"Failed to fetch ledger: HTTP {exc.response.status_code}"
+            ) from exc
+
+        payload = response.json()
+        return [LedgerEntry.model_validate(item) for item in payload.get("entries", [])]
+
+    def fetch_ledger_manifests(self, limit: int = 24) -> list[LedgerManifest]:
+        """Fetch recent signed ledger manifests for the authenticated tenant (sync)."""
+        query = urlencode({"limit": max(1, min(limit, 500))})
+        try:
+            response = self._sync_retry(
+                lambda: self._get_sync_client().get(f"/ledger/manifests?{query}")
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise VaultConnectionError(
+                f"Failed to fetch ledger manifests: HTTP {exc.response.status_code}"
+            ) from exc
+
+        payload = response.json()
+        return [LedgerManifest.model_validate(item) for item in payload.get("manifests", [])]
+
+    async def afetch_ledger_manifests(self, limit: int = 24) -> list[LedgerManifest]:
+        """Fetch recent signed ledger manifests for the authenticated tenant (async)."""
+        query = urlencode({"limit": max(1, min(limit, 500))})
+        try:
+            response = await self._async_retry(
+                lambda: self._get_async_client().get(f"/ledger/manifests?{query}")
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise VaultConnectionError(
+                f"Failed to fetch ledger manifests: HTTP {exc.response.status_code}"
+            ) from exc
+
+        payload = response.json()
+        return [LedgerManifest.model_validate(item) for item in payload.get("manifests", [])]
+
+    def verify_ledger_proof(
+        self,
+        entries: list[LedgerEntry | dict[str, Any]] | None = None,
+        manifests: list[LedgerManifest | dict[str, Any]] | None = None,
+    ) -> LedgerVerificationResult:
+        """Verify ledger row receipts and manifest signatures offline using the Vault JWKS."""
+        entries = (
+            [item if isinstance(item, LedgerEntry) else LedgerEntry.model_validate(item) for item in entries]
+            if entries is not None
+            else self.fetch_ledger()
+        )
+        manifests = (
+            [item if isinstance(item, LedgerManifest) else LedgerManifest.model_validate(item) for item in manifests]
+            if manifests is not None
+            else self.fetch_ledger_manifests()
+        )
+        if self._jwks_cache is None:
+            self.fetch_jwks()
+        return self._verify_ledger_proof(entries, manifests)
+
+    async def averify_ledger_proof(
+        self,
+        entries: list[LedgerEntry | dict[str, Any]] | None = None,
+        manifests: list[LedgerManifest | dict[str, Any]] | None = None,
+    ) -> LedgerVerificationResult:
+        """Async variant of ``verify_ledger_proof``."""
+        entries = (
+            [item if isinstance(item, LedgerEntry) else LedgerEntry.model_validate(item) for item in entries]
+            if entries is not None
+            else await self.afetch_ledger()
+        )
+        manifests = (
+            [item if isinstance(item, LedgerManifest) else LedgerManifest.model_validate(item) for item in manifests]
+            if manifests is not None
+            else await self.afetch_ledger_manifests()
+        )
+        if self._jwks_cache is None:
+            await self.afetch_jwks()
+        return self._verify_ledger_proof(entries, manifests)
+
     def verify_token(self, token: str) -> dict[str, Any]:
         """Verify an A-JWT using the Vault's public key (sync).
 
@@ -373,6 +479,111 @@ class LedgixClient:
             raise TokenVerificationError(f"Invalid A-JWT: {exc}") from exc
         except Exception as exc:
             raise TokenVerificationError(f"Token verification failed: {exc}") from exc
+
+    def _verify_ledger_proof(
+        self,
+        entries: list[LedgerEntry],
+        manifests: list[LedgerManifest],
+    ) -> LedgerVerificationResult:
+        if not self._jwks_cache:
+            return LedgerVerificationResult(
+                intact=False,
+                verified_entries=0,
+                verified_manifests=0,
+                latest_row_hash=None,
+                latest_manifest_hash=None,
+                error="No JWKS available from Vault",
+            )
+
+        try:
+            jwks = self._jwks_cache
+            keys = jwks.get("keys") if isinstance(jwks, dict) else None
+            if not isinstance(keys, list) or not keys:
+                raise TokenVerificationError("JWKS contains no keys")
+
+            algorithm = jwt.algorithms.get_default_algorithms()["EdDSA"]
+            key_cache: dict[str, Any] = {}
+
+            def key_for_kid(kid: str) -> Any:
+                if kid in key_cache:
+                    return key_cache[kid]
+                match = next(
+                    (
+                        item
+                        for item in keys
+                        if isinstance(item, dict) and item.get("kid") == kid
+                    ),
+                    None,
+                )
+                if match is None:
+                    raise TokenVerificationError(f"No public key found for kid {kid}")
+                public_key = jwt.algorithms.OKPAlgorithm.from_jwk(json.dumps(match))
+                key_cache[kid] = public_key
+                return public_key
+
+            previous_row_hash = "0" * 64
+            sorted_entries = sorted(entries, key=lambda item: item.seq)
+            for entry in sorted_entries:
+                if entry.prev_row_hash != previous_row_hash:
+                    raise TokenVerificationError(f"Ledger chain broken at seq {entry.seq}")
+                if not entry.receipt_payload or not entry.row_signature or not entry.signer_key_id:
+                    raise TokenVerificationError(f"Missing receipt proof data at seq {entry.seq}")
+                if not algorithm.verify(
+                    self._decode_base64url(entry.receipt_payload),
+                    key_for_kid(entry.signer_key_id),
+                    self._decode_base64url(entry.row_signature),
+                ):
+                    raise TokenVerificationError(f"Ledger receipt signature invalid at seq {entry.seq}")
+                previous_row_hash = entry.row_hash
+
+            previous_manifest_hash = "sha256:" + ("0" * 64)
+            sorted_manifests = sorted(manifests, key=lambda item: item.period_start)
+            for manifest in sorted_manifests:
+                if manifest.prev_manifest_hash != previous_manifest_hash:
+                    raise TokenVerificationError(
+                        f"Manifest chain broken at {manifest.period_start}"
+                    )
+                if not manifest.manifest_payload or not manifest.manifest_signature or not manifest.signer_key_id:
+                    raise TokenVerificationError(
+                        f"Missing manifest proof data at {manifest.period_start}"
+                    )
+                payload_bytes = self._decode_base64url(manifest.manifest_payload)
+                if not algorithm.verify(
+                    payload_bytes,
+                    key_for_kid(manifest.signer_key_id),
+                    self._decode_base64url(manifest.manifest_signature),
+                ):
+                    raise TokenVerificationError(
+                        f"Manifest signature invalid at {manifest.period_start}"
+                    )
+                payload_hash = hashlib.sha256(payload_bytes).hexdigest()
+                if f"sha256:{payload_hash}" != manifest.manifest_hash:
+                    raise TokenVerificationError(
+                        f"Manifest hash mismatch at {manifest.period_start}"
+                    )
+                previous_manifest_hash = manifest.manifest_hash
+
+            return LedgerVerificationResult(
+                intact=True,
+                verified_entries=len(sorted_entries),
+                verified_manifests=len(sorted_manifests),
+                latest_row_hash=sorted_entries[-1].row_hash if sorted_entries else None,
+                latest_manifest_hash=sorted_manifests[-1].manifest_hash if sorted_manifests else None,
+            )
+        except Exception as exc:
+            return LedgerVerificationResult(
+                intact=False,
+                verified_entries=0,
+                verified_manifests=0,
+                latest_row_hash=None,
+                latest_manifest_hash=None,
+                error=str(exc),
+            )
+
+    @staticmethod
+    def _decode_base64url(value: str) -> bytes:
+        padded = value + "=" * ((4 - len(value) % 4) % 4)
+        return base64.urlsafe_b64decode(padded.encode("ascii"))
 
     # ------------------------------------------------------------------
     # Lifecycle

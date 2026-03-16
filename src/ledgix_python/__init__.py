@@ -27,6 +27,9 @@ from .exceptions import (
 from .models import (
     ClearanceRequest,
     ClearanceResponse,
+    LedgerEntry,
+    LedgerManifest,
+    LedgerVerificationResult,
     PolicyRegistration,
     PolicyRegistrationResponse,
 )
@@ -43,6 +46,9 @@ __all__ = [
     # Models
     "ClearanceRequest",
     "ClearanceResponse",
+    "LedgerEntry",
+    "LedgerManifest",
+    "LedgerVerificationResult",
     "PolicyRegistration",
     "PolicyRegistrationResponse",
     # Exceptions
