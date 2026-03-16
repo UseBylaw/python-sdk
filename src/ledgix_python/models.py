@@ -116,4 +116,6 @@ class LedgerVerificationResult(BaseModel):
     verified_manifests: int
     latest_row_hash: str | None = None
     latest_manifest_hash: str | None = None
+    legacy_unsigned_entries: int = 0
+    coverage_note: str | None = None
     error: str | None = None

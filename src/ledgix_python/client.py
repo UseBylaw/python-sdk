@@ -526,6 +526,21 @@ class LedgixClient:
             for entry in sorted_entries:
                 if entry.prev_row_hash != previous_row_hash:
                     raise TokenVerificationError(f"Ledger chain broken at seq {entry.seq}")
+                previous_row_hash = entry.row_hash
+
+            first_signed_entry_index = next(
+                (
+                    index
+                    for index, entry in enumerate(sorted_entries)
+                    if entry.receipt_payload and entry.row_signature and entry.signer_key_id
+                ),
+                -1,
+            )
+            if first_signed_entry_index == -1:
+                raise TokenVerificationError("No signed receipt proof data is available for this ledger yet")
+
+            signed_entries = sorted_entries[first_signed_entry_index:]
+            for entry in signed_entries:
                 if not entry.receipt_payload or not entry.row_signature or not entry.signer_key_id:
                     raise TokenVerificationError(f"Missing receipt proof data at seq {entry.seq}")
                 if not algorithm.verify(
@@ -534,7 +549,6 @@ class LedgixClient:
                     self._decode_base64url(entry.row_signature),
                 ):
                     raise TokenVerificationError(f"Ledger receipt signature invalid at seq {entry.seq}")
-                previous_row_hash = entry.row_hash
 
             previous_manifest_hash = "sha256:" + ("0" * 64)
             sorted_manifests = sorted(manifests, key=lambda item: item.period_start)
@@ -565,10 +579,17 @@ class LedgixClient:
 
             return LedgerVerificationResult(
                 intact=True,
-                verified_entries=len(sorted_entries),
+                verified_entries=len(signed_entries),
                 verified_manifests=len(sorted_manifests),
                 latest_row_hash=sorted_entries[-1].row_hash if sorted_entries else None,
                 latest_manifest_hash=sorted_manifests[-1].manifest_hash if sorted_manifests else None,
+                legacy_unsigned_entries=first_signed_entry_index,
+                coverage_note=(
+                    f"Verified signed receipts from seq {signed_entries[0].seq} onward. "
+                    f"{first_signed_entry_index} earlier {'entry predates' if first_signed_entry_index == 1 else 'entries predate'} signed receipt proofs."
+                    if first_signed_entry_index > 0
+                    else None
+                ),
             )
         except Exception as exc:
             return LedgerVerificationResult(
@@ -577,6 +598,8 @@ class LedgixClient:
                 verified_manifests=0,
                 latest_row_hash=None,
                 latest_manifest_hash=None,
+                legacy_unsigned_entries=0,
+                coverage_note=None,
                 error=str(exc),
             )
 
