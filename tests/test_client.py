@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import struct
 
 import httpx
 import pytest
@@ -318,6 +319,112 @@ class TestLedgerProofVerification:
     def _b64url(value: bytes) -> str:
         return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
 
+    @staticmethod
+    def _cbor_header(major: int, value: int) -> bytes:
+        if value <= 23:
+            return bytes([(major << 5) | value])
+        if value <= 0xFF:
+            return bytes([(major << 5) | 24, value])
+        if value <= 0xFFFF:
+            return bytes([(major << 5) | 25]) + value.to_bytes(2, "big")
+        if value <= 0xFFFFFFFF:
+            return bytes([(major << 5) | 26]) + value.to_bytes(4, "big")
+        return bytes([(major << 5) | 27]) + value.to_bytes(8, "big")
+
+    @classmethod
+    def _encode_cbor(cls, value):
+        if value is None:
+            return b"\xf6"
+        if isinstance(value, bool):
+            return b"\xf5" if value else b"\xf4"
+        if isinstance(value, str):
+            encoded = value.encode("utf-8")
+            return cls._cbor_header(3, len(encoded)) + encoded
+        if isinstance(value, int):
+            if value >= 0:
+                return cls._cbor_header(0, value)
+            return cls._cbor_header(1, -(value + 1))
+        if isinstance(value, float):
+            return b"\xfb" + struct.pack(">d", value)
+        if isinstance(value, list):
+            return cls._cbor_header(4, len(value)) + b"".join(cls._encode_cbor(item) for item in value)
+        if isinstance(value, dict):
+            keys = sorted(value.keys(), key=lambda item: (len(item), item))
+            encoded = bytearray()
+            for key in keys:
+                encoded.extend(cls._encode_cbor(key))
+                encoded.extend(cls._encode_cbor(value[key]))
+            return cls._cbor_header(5, len(keys)) + bytes(encoded)
+        raise TypeError(f"unsupported test CBOR value {type(value)!r}")
+
+    @staticmethod
+    def _sha256_hex(*parts: bytes) -> str:
+        digest = hashlib.sha256()
+        for part in parts:
+            digest.update(part)
+        return digest.hexdigest()
+
+    @classmethod
+    def _build_event_hash(cls, entry: dict) -> str:
+        payload = cls._encode_cbor(
+            {
+                "accepted_at": entry["accepted_at"],
+                "agent_id": entry["agent_id"],
+                "approved": entry["approved"],
+                "canonical_version": entry["canonical_version"],
+                "citations": entry["citations"],
+                "confidence": entry["confidence"],
+                "event_uuid": entry["event_uuid"],
+                "evidence_chunks": entry["evidence_chunks"],
+                "intent_hash": entry["intent_hash"],
+                "policy_id": entry["policy_id"],
+                "reason": entry["reason"],
+                "request_id": entry["request_id"],
+                "tool_args": entry["tool_args"],
+                "tool_name": entry["tool_name"],
+            }
+        )
+        return cls._sha256_hex(b"ledgix.audit.event.v1\x00", payload)
+
+    @classmethod
+    def _hash_leaf(cls, event_hash: str) -> str:
+        return cls._sha256_hex(b"\x00", bytes.fromhex(event_hash))
+
+    @classmethod
+    def _build_receipt_payload(cls, entry: dict) -> bytes:
+        return cls._encode_cbor(
+            {
+                "accepted_at": entry["accepted_at"],
+                "event_hash": entry["event_hash"],
+                "event_uuid": entry["event_uuid"],
+                "leaf_hash": entry["leaf_hash"],
+                "receipt_key_id": entry["receipt_key_id"],
+                "request_id": entry["request_id"],
+                "type": "event_receipt",
+                "version": 1,
+            }
+        )
+
+    @classmethod
+    def _build_checkpoint_payload(cls, checkpoint: dict) -> bytes:
+        return cls._encode_cbor(
+            {
+                "export_targets": [checkpoint["export_target"]] if checkpoint["export_target"] else [],
+                "key_id": checkpoint["signer_key_id"],
+                "mmd_seconds": checkpoint["mmd_seconds"],
+                "prev_checkpoint_hash": checkpoint["prev_checkpoint_hash"],
+                "root_hash": checkpoint["root_hash"],
+                "signed_at": checkpoint["signed_at"],
+                "tree_size": checkpoint["tree_size"],
+                "type": "checkpoint",
+                "version": 1,
+            }
+        )
+
+    @classmethod
+    def _hash_checkpoint_payload(cls, payload: bytes) -> str:
+        return cls._sha256_hex(b"ledgix.audit.checkpoint.v1\x00", payload)
+
     @respx.mock
     def test_fetch_ledger_and_manifests(self, client: LedgixClient):
         respx.get("https://vault.test/ledger?limit=2").mock(
@@ -327,28 +434,51 @@ class TestLedgerProofVerification:
                     "entries": [
                         {
                             "seq": 2,
+                            "event_uuid": "evt-2",
                             "request_id": "req-2",
+                            "agent_id": "agent-2",
+                            "policy_id": "policy-2",
+                            "intent_hash": "intent-2",
                             "tool_name": "stripe_refund",
+                            "tool_args": {"amount": 60},
+                            "reason": "approved",
+                            "citations": [],
+                            "evidence_chunks": [],
+                            "confidence": 0.88,
                             "approved": True,
-                            "decided_at": "2026-03-15T12:00:00Z",
-                            "row_hash": "b" * 64,
+                            "accepted_at": "2026-03-15T12:00:00Z",
+                            "canonical_version": 1,
+                            "event_hash": "a" * 64,
+                            "leaf_hash": "b" * 64,
+                            "leaf_index": 1,
+                            "checkpoint_id": 7,
+                            "receipt_algorithm": "Ed25519",
+                            "receipt_key_id": "test-key-001",
+                            "receipt_signature": "sig",
+                            "receipt_payload": "payload",
                         }
                     ]
                 },
             )
         )
-        respx.get("https://vault.test/ledger/manifests?limit=3").mock(
+        respx.get("https://vault.test/ledger/checkpoints?limit=3").mock(
             return_value=Response(
                 200,
                 json={
-                    "manifests": [
+                    "checkpoints": [
                         {
-                            "period_start": "2026-03-15T12:00:00Z",
-                            "period_end_exclusive": "2026-03-15T13:00:00Z",
-                            "generated_at": "2026-03-15T13:00:00Z",
-                            "head_seq": 2,
-                            "head_row_hash": "b" * 64,
-                            "manifest_hash": "sha256:" + ("c" * 64),
+                            "checkpoint_id": 7,
+                            "microblock_id": 3,
+                            "tree_size": 2,
+                            "root_hash": "c" * 64,
+                            "checkpoint_hash": "d" * 64,
+                            "prev_checkpoint_hash": "",
+                            "signature_algorithm": "Ed25519",
+                            "signer_key_id": "test-key-001",
+                            "checkpoint_signature": "sig",
+                            "checkpoint_payload": "payload",
+                            "signed_at": "2026-03-15T13:00:00Z",
+                            "mmd_seconds": 30,
                         }
                     ]
                 },
@@ -361,7 +491,7 @@ class TestLedgerProofVerification:
         assert len(entries) == 1
         assert entries[0].request_id == "req-2"
         assert len(manifests) == 1
-        assert manifests[0].head_seq == 2
+        assert manifests[0].tree_size == 2
 
     @respx.mock
     def test_verify_ledger_proof(
@@ -370,63 +500,72 @@ class TestLedgerProofVerification:
         ed25519_private_key,
         jwks_response: dict,
     ):
-        row_payload = b'{"client_id":"demo","seq":1,"row_hash":"' + ("a" * 64).encode("ascii") + b'"}'
-        row_signature = ed25519_private_key.sign(row_payload)
-        manifest_payload = (
-            b'{"period_start":"2026-03-15T12:00:00Z","head_seq":1,"head_row_hash":"'
-            + ("a" * 64).encode("ascii")
-            + b'"}'
-        )
-        manifest_signature = ed25519_private_key.sign(manifest_payload)
-        manifest_hash = "sha256:" + hashlib.sha256(manifest_payload).hexdigest()
+        entry = {
+            "seq": 1,
+            "event_uuid": "evt-1",
+            "request_id": "req-1",
+            "agent_id": "agent-1",
+            "policy_id": "policy-1",
+            "intent_hash": "intent-1",
+            "tool_name": "stripe_refund",
+            "tool_args": {"amount": 45},
+            "reason": "ok",
+            "citations": [],
+            "evidence_chunks": [],
+            "confidence": 0.91,
+            "approved": True,
+            "accepted_at": "2026-03-15T12:00:00Z",
+            "canonical_version": 1,
+            "event_hash": "",
+            "leaf_hash": "",
+            "leaf_index": 0,
+            "checkpoint_id": 1,
+            "receipt_algorithm": "Ed25519",
+            "receipt_key_id": "test-key-001",
+            "receipt_signature": "",
+            "receipt_payload": "",
+        }
+        entry["event_hash"] = self._build_event_hash(entry)
+        entry["leaf_hash"] = self._hash_leaf(entry["event_hash"])
+        receipt_payload = self._build_receipt_payload(entry)
+        entry["receipt_payload"] = self._b64url(receipt_payload)
+        entry["receipt_signature"] = self._b64url(ed25519_private_key.sign(receipt_payload))
+
+        checkpoint = {
+            "checkpoint_id": 1,
+            "microblock_id": 1,
+            "tree_size": 1,
+            "root_hash": entry["leaf_hash"],
+            "checkpoint_hash": "",
+            "prev_checkpoint_hash": "",
+            "signature_algorithm": "Ed25519",
+            "signer_key_id": "test-key-001",
+            "checkpoint_signature": "",
+            "checkpoint_payload": "",
+            "signed_at": "2026-03-15T13:00:00Z",
+            "mmd_seconds": 30,
+            "export_target": "",
+            "export_uri": "",
+            "export_status": "",
+        }
+        checkpoint_payload = self._build_checkpoint_payload(checkpoint)
+        checkpoint["checkpoint_hash"] = self._hash_checkpoint_payload(checkpoint_payload)
+        checkpoint["checkpoint_payload"] = self._b64url(checkpoint_payload)
+        checkpoint["checkpoint_signature"] = self._b64url(ed25519_private_key.sign(checkpoint_payload))
 
         respx.get("https://vault.test/.well-known/jwks.json").mock(
             return_value=Response(200, json=jwks_response)
         )
 
         result = client.verify_ledger_proof(
-            entries=[
-                {
-                    "seq": 1,
-                    "request_id": "req-1",
-                    "agent_id": "agent-1",
-                    "policy_id": "policy-1",
-                    "tool_name": "stripe_refund",
-                    "tool_args": {"amount": 45},
-                    "reason": "ok",
-                    "approved": True,
-                    "confidence": 0.91,
-                    "decided_at": "2026-03-15T12:00:00Z",
-                    "prev_row_hash": "0" * 64,
-                    "row_hash": "a" * 64,
-                    "signer_key_id": "test-key-001",
-                    "row_signature": self._b64url(row_signature),
-                    "receipt_payload": self._b64url(row_payload),
-                }
-            ],
-            manifests=[
-                {
-                    "period_start": "2026-03-15T12:00:00Z",
-                    "period_end_exclusive": "2026-03-15T13:00:00Z",
-                    "generated_at": "2026-03-15T13:00:00Z",
-                    "head_seq": 1,
-                    "head_row_hash": "a" * 64,
-                    "head_row_signature": self._b64url(row_signature),
-                    "manifest_hash": manifest_hash,
-                    "prev_manifest_hash": "sha256:" + ("0" * 64),
-                    "signer_key_id": "test-key-001",
-                    "manifest_signature": self._b64url(manifest_signature),
-                    "manifest_payload": self._b64url(manifest_payload),
-                    "anchor_uri": "s3://ledgix-ledger/demo/2026-03-15T13:00:00Z.json",
-                    "anchored_at": "2026-03-15T13:00:30Z",
-                }
-            ],
+            entries=[entry],
+            manifests=[checkpoint],
         )
 
         assert result.intact is True
         assert result.verified_entries == 1
         assert result.verified_manifests == 1
-        assert result.latest_row_hash == "a" * 64
+        assert result.latest_leaf_hash == entry["leaf_hash"]
 
     @respx.mock
     @pytest.mark.asyncio
@@ -436,59 +575,70 @@ class TestLedgerProofVerification:
         ed25519_private_key,
         jwks_response: dict,
     ):
-        row_payload = b'{"client_id":"demo","seq":2,"row_hash":"' + ("b" * 64).encode("ascii") + b'"}'
-        row_signature = ed25519_private_key.sign(row_payload)
-        manifest_payload = (
-            b'{"period_start":"2026-03-15T13:00:00Z","head_seq":2,"head_row_hash":"'
-            + ("b" * 64).encode("ascii")
-            + b'"}'
-        )
-        manifest_signature = ed25519_private_key.sign(manifest_payload)
-        manifest_hash = "sha256:" + hashlib.sha256(manifest_payload).hexdigest()
+        entry = {
+            "seq": 2,
+            "event_uuid": "evt-2",
+            "request_id": "req-2",
+            "agent_id": "agent-2",
+            "policy_id": "policy-2",
+            "intent_hash": "intent-2",
+            "tool_name": "stripe_refund",
+            "tool_args": {"amount": 60},
+            "reason": "ok",
+            "citations": [],
+            "evidence_chunks": [],
+            "confidence": 0.88,
+            "approved": True,
+            "accepted_at": "2026-03-15T13:00:00Z",
+            "canonical_version": 1,
+            "event_hash": "",
+            "leaf_hash": "",
+            "leaf_index": 0,
+            "checkpoint_id": 2,
+            "receipt_algorithm": "Ed25519",
+            "receipt_key_id": "test-key-001",
+            "receipt_signature": "",
+            "receipt_payload": "",
+        }
+        entry["event_hash"] = self._build_event_hash(entry)
+        entry["leaf_hash"] = self._hash_leaf(entry["event_hash"])
+        receipt_payload = self._build_receipt_payload(entry)
+        entry["receipt_payload"] = self._b64url(receipt_payload)
+        entry["receipt_signature"] = self._b64url(ed25519_private_key.sign(receipt_payload))
+
+        checkpoint = {
+            "checkpoint_id": 2,
+            "microblock_id": 2,
+            "tree_size": 1,
+            "root_hash": entry["leaf_hash"],
+            "checkpoint_hash": "",
+            "prev_checkpoint_hash": "",
+            "signature_algorithm": "Ed25519",
+            "signer_key_id": "test-key-001",
+            "checkpoint_signature": "",
+            "checkpoint_payload": "",
+            "signed_at": "2026-03-15T14:00:00Z",
+            "mmd_seconds": 30,
+            "export_target": "",
+            "export_uri": "",
+            "export_status": "",
+        }
+        checkpoint_payload = self._build_checkpoint_payload(checkpoint)
+        checkpoint["checkpoint_hash"] = self._hash_checkpoint_payload(checkpoint_payload)
+        checkpoint["checkpoint_payload"] = self._b64url(checkpoint_payload)
+        checkpoint["checkpoint_signature"] = self._b64url(ed25519_private_key.sign(checkpoint_payload))
 
         respx.get("https://vault.test/.well-known/jwks.json").mock(
             return_value=Response(200, json=jwks_response)
         )
 
         result = await client.averify_ledger_proof(
-            entries=[
-                {
-                    "seq": 2,
-                    "request_id": "req-2",
-                    "agent_id": "agent-2",
-                    "policy_id": "policy-2",
-                    "tool_name": "stripe_refund",
-                    "tool_args": {"amount": 60},
-                    "reason": "ok",
-                    "approved": True,
-                    "confidence": 0.88,
-                    "decided_at": "2026-03-15T13:00:00Z",
-                    "prev_row_hash": "0" * 64,
-                    "row_hash": "b" * 64,
-                    "signer_key_id": "test-key-001",
-                    "row_signature": self._b64url(row_signature),
-                    "receipt_payload": self._b64url(row_payload),
-                }
-            ],
-            manifests=[
-                {
-                    "period_start": "2026-03-15T13:00:00Z",
-                    "period_end_exclusive": "2026-03-15T14:00:00Z",
-                    "generated_at": "2026-03-15T14:00:00Z",
-                    "head_seq": 2,
-                    "head_row_hash": "b" * 64,
-                    "head_row_signature": self._b64url(row_signature),
-                    "manifest_hash": manifest_hash,
-                    "prev_manifest_hash": "sha256:" + ("0" * 64),
-                    "signer_key_id": "test-key-001",
-                    "manifest_signature": self._b64url(manifest_signature),
-                    "manifest_payload": self._b64url(manifest_payload),
-                }
-            ],
+            entries=[entry],
+            manifests=[checkpoint],
         )
 
         assert result.intact is True
-        assert result.latest_manifest_hash == manifest_hash
+        assert result.latest_manifest_hash == checkpoint["checkpoint_hash"]
 
 
 # ──────────────────────────────────────────────────────────────────────

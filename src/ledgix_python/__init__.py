@@ -27,14 +27,19 @@ from .exceptions import (
 from .models import (
     ClearanceRequest,
     ClearanceResponse,
+    ConsistencyProof,
+    InclusionProof,
+    LedgerCheckpoint,
     LedgerEntry,
+    LedgerKeyVersion,
     LedgerManifest,
+    LedgerProofBundle,
     LedgerVerificationResult,
     PolicyRegistration,
     PolicyRegistrationResponse,
 )
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
 __all__ = [
     # Core
@@ -46,8 +51,13 @@ __all__ = [
     # Models
     "ClearanceRequest",
     "ClearanceResponse",
+    "ConsistencyProof",
+    "InclusionProof",
+    "LedgerCheckpoint",
     "LedgerEntry",
+    "LedgerKeyVersion",
     "LedgerManifest",
+    "LedgerProofBundle",
     "LedgerVerificationResult",
     "PolicyRegistration",
     "PolicyRegistrationResponse",

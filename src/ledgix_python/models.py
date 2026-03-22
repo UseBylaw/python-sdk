@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class ClearanceRequest(BaseModel):
@@ -68,7 +68,10 @@ class PolicyRegistrationResponse(BaseModel):
 class LedgerEntry(BaseModel):
     """Ledger entry returned by the Vault's ledger endpoints."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     seq: int
+    event_uuid: str
     request_id: str
     agent_id: str = ""
     policy_id: str = ""
@@ -80,32 +83,101 @@ class LedgerEntry(BaseModel):
     evidence_chunks: list[dict[str, Any]] = Field(default_factory=list)
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     approved: bool
-    decided_at: str
-    prev_row_hash: str = ""
-    row_hash: str
-    signature_algorithm: str = ""
+    accepted_at: str = Field(validation_alias=AliasChoices("accepted_at", "decided_at"))
+    canonical_version: int = 1
+    event_hash: str
+    leaf_hash: str
+    leaf_index: int | None = None
+    checkpoint_id: int | None = None
+    receipt_algorithm: str = Field(
+        default="",
+        validation_alias=AliasChoices("receipt_algorithm", "signature_algorithm"),
+    )
+    receipt_key_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("receipt_key_id", "signer_key_id"),
+    )
+    receipt_signature: str = Field(
+        default="",
+        validation_alias=AliasChoices("receipt_signature", "row_signature"),
+    )
+    receipt_payload: str = Field(default="")
+
+
+class LedgerCheckpoint(BaseModel):
+    """Signed checkpoint returned by the Vault."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    checkpoint_id: int
+    microblock_id: int = 0
+    tree_size: int
+    root_hash: str = Field(validation_alias=AliasChoices("root_hash", "head_row_hash"))
+    checkpoint_hash: str = Field(
+        validation_alias=AliasChoices("checkpoint_hash", "manifest_hash"),
+    )
+    prev_checkpoint_hash: str = Field(
+        default="",
+        validation_alias=AliasChoices("prev_checkpoint_hash", "prev_manifest_hash"),
+    )
+    signature_algorithm: str = Field(
+        default="",
+        validation_alias=AliasChoices("signature_algorithm", "signature_algorithm"),
+    )
     signer_key_id: str = ""
-    row_signature: str = ""
-    receipt_payload: str = ""
+    checkpoint_signature: str = Field(
+        default="",
+        validation_alias=AliasChoices("checkpoint_signature", "manifest_signature"),
+    )
+    checkpoint_payload: str = Field(
+        default="",
+        validation_alias=AliasChoices("checkpoint_payload", "manifest_payload"),
+    )
+    signed_at: str = Field(validation_alias=AliasChoices("signed_at", "generated_at", "period_start"))
+    mmd_seconds: int = 30
+    export_target: str = ""
+    export_uri: str = ""
+    export_status: str = ""
+    exported_at: str | None = None
 
 
-class LedgerManifest(BaseModel):
-    """Signed chain-head manifest returned by the Vault."""
+LedgerManifest = LedgerCheckpoint
 
-    period_start: str
-    period_end_exclusive: str
-    generated_at: str
-    head_seq: int
-    head_row_hash: str
-    head_row_signature: str = ""
-    manifest_hash: str
-    prev_manifest_hash: str = ""
-    signature_algorithm: str = ""
-    signer_key_id: str = ""
-    manifest_signature: str = ""
-    manifest_payload: str = ""
-    anchor_uri: str = ""
-    anchored_at: str | None = None
+
+class LedgerKeyVersion(BaseModel):
+    key_id: str
+    algorithm: str
+    public_jwk: str = ""
+    active_from: str
+    retired_at: str | None = None
+    attestation_payload: str = ""
+    attestation_signature: str = ""
+    attestation_key_id: str = ""
+    attestation_status: str = ""
+
+
+class InclusionProof(BaseModel):
+    event_uuid: str
+    request_id: str
+    event_hash: str
+    leaf_hash: str
+    leaf_index: int
+    tree_size: int
+    path: list[str] = Field(default_factory=list)
+    checkpoint: LedgerCheckpoint
+
+
+class ConsistencyProof(BaseModel):
+    from_checkpoint: LedgerCheckpoint
+    to_checkpoint: LedgerCheckpoint
+    path: list[str] = Field(default_factory=list)
+
+
+class LedgerProofBundle(BaseModel):
+    event: LedgerEntry
+    inclusion: InclusionProof
+    consistency: ConsistencyProof | None = None
+    keys: list[LedgerKeyVersion] = Field(default_factory=list)
 
 
 class LedgerVerificationResult(BaseModel):
@@ -113,9 +185,10 @@ class LedgerVerificationResult(BaseModel):
 
     intact: bool
     verified_entries: int
+    verified_checkpoints: int = 0
     verified_manifests: int
-    latest_row_hash: str | None = None
+    latest_leaf_hash: str | None = None
+    latest_checkpoint_hash: str | None = None
     latest_manifest_hash: str | None = None
-    legacy_unsigned_entries: int = 0
     coverage_note: str | None = None
     error: str | None = None
