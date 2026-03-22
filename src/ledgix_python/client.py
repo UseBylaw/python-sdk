@@ -802,15 +802,15 @@ class LedgixClient:
                 "agent_id": entry.agent_id,
                 "approved": entry.approved,
                 "canonical_version": entry.canonical_version,
-                "citations": entry.citations,
+                "citations": self._normalize_json_numbers_for_cbor(entry.citations),
                 "confidence": entry.confidence,
                 "event_uuid": entry.event_uuid,
-                "evidence_chunks": entry.evidence_chunks,
+                "evidence_chunks": self._normalize_json_numbers_for_cbor(entry.evidence_chunks),
                 "intent_hash": entry.intent_hash,
                 "policy_id": entry.policy_id,
                 "reason": entry.reason,
                 "request_id": entry.request_id,
-                "tool_args": entry.tool_args,
+                "tool_args": self._normalize_json_numbers_for_cbor(entry.tool_args),
                 "tool_name": entry.tool_name,
             }
         )
@@ -943,6 +943,17 @@ class LedgixClient:
     @staticmethod
     def _is_power_of_two(value: int) -> bool:
         return value > 0 and (value & (value - 1)) == 0
+
+    def _normalize_json_numbers_for_cbor(self, value: Any) -> Any:
+        if value is None or isinstance(value, (str, bool, float)):
+            return value
+        if isinstance(value, int):
+            return float(value)
+        if isinstance(value, (list, tuple)):
+            return [self._normalize_json_numbers_for_cbor(item) for item in value]
+        if isinstance(value, dict):
+            return {key: self._normalize_json_numbers_for_cbor(item) for key, item in value.items()}
+        return value
 
     def _encode_deterministic_cbor(self, value: Any) -> bytes:
         if value is None:

@@ -365,6 +365,18 @@ class TestLedgerProofVerification:
         return digest.hexdigest()
 
     @classmethod
+    def _normalize_json_numbers(cls, value):
+        if value is None or isinstance(value, (str, bool, float)):
+            return value
+        if isinstance(value, int):
+            return float(value)
+        if isinstance(value, list):
+            return [cls._normalize_json_numbers(item) for item in value]
+        if isinstance(value, dict):
+            return {key: cls._normalize_json_numbers(item) for key, item in value.items()}
+        return value
+
+    @classmethod
     def _build_event_hash(cls, entry: dict) -> str:
         payload = cls._encode_cbor(
             {
@@ -372,15 +384,15 @@ class TestLedgerProofVerification:
                 "agent_id": entry["agent_id"],
                 "approved": entry["approved"],
                 "canonical_version": entry["canonical_version"],
-                "citations": entry["citations"],
+                "citations": cls._normalize_json_numbers(entry["citations"]),
                 "confidence": entry["confidence"],
                 "event_uuid": entry["event_uuid"],
-                "evidence_chunks": entry["evidence_chunks"],
+                "evidence_chunks": cls._normalize_json_numbers(entry["evidence_chunks"]),
                 "intent_hash": entry["intent_hash"],
                 "policy_id": entry["policy_id"],
                 "reason": entry["reason"],
                 "request_id": entry["request_id"],
-                "tool_args": entry["tool_args"],
+                "tool_args": cls._normalize_json_numbers(entry["tool_args"]),
                 "tool_name": entry["tool_name"],
             }
         )

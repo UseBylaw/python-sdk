@@ -1,6 +1,6 @@
 # Ledgix ALCV — Python SDK
 
-[![PyPI](https://img.shields.io/badge/pypi-v0.1.5-blue)](https://pypi.org/project/ledgix-python/)
+[![PyPI](https://img.shields.io/badge/pypi-v0.1.6-blue)](https://pypi.org/project/ledgix-python/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
