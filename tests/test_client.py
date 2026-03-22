@@ -580,6 +580,86 @@ class TestLedgerProofVerification:
         assert result.latest_leaf_hash == entry["leaf_hash"]
 
     @respx.mock
+    def test_verify_ledger_proof_with_redacted_public_entry(
+        self,
+        client: LedgixClient,
+        ed25519_private_key,
+        jwks_response: dict,
+    ):
+        full_entry = {
+            "seq": 1,
+            "event_uuid": "evt-1",
+            "request_id": "req-1",
+            "agent_id": "agent-1",
+            "policy_id": "policy-1",
+            "intent_hash": "intent-1",
+            "tool_name": "stripe_refund",
+            "tool_args": {"amount": 45},
+            "reason": "ok",
+            "citations": [],
+            "evidence_chunks": [],
+            "confidence": 0.91,
+            "approved": True,
+            "accepted_at": "2026-03-15T12:00:00Z",
+            "canonical_version": 1,
+            "event_hash": "",
+            "leaf_hash": "",
+            "leaf_index": 0,
+            "checkpoint_id": 1,
+            "receipt_algorithm": "Ed25519",
+            "receipt_key_id": "test-key-001",
+            "receipt_signature": "",
+            "receipt_payload": "",
+        }
+        full_entry["event_hash"] = self._build_event_hash(full_entry)
+        full_entry["leaf_hash"] = self._hash_leaf(full_entry["event_hash"])
+        receipt_payload = self._build_receipt_payload(full_entry)
+        full_entry["receipt_payload"] = self._b64url(receipt_payload)
+        full_entry["receipt_signature"] = self._b64url(ed25519_private_key.sign(receipt_payload))
+
+        public_entry = {
+            **full_entry,
+            "intent_hash": "",
+            "tool_args": {},
+        }
+
+        checkpoint = {
+            "checkpoint_id": 1,
+            "microblock_id": 1,
+            "tree_size": 1,
+            "root_hash": full_entry["leaf_hash"],
+            "checkpoint_hash": "",
+            "prev_checkpoint_hash": "",
+            "signature_algorithm": "Ed25519",
+            "signer_key_id": "test-key-001",
+            "checkpoint_signature": "",
+            "checkpoint_payload": "",
+            "signed_at": "2026-03-15T13:00:00Z",
+            "mmd_seconds": 30,
+            "export_target": "",
+            "export_uri": "",
+            "export_status": "",
+        }
+        checkpoint_payload = self._build_checkpoint_payload(checkpoint)
+        checkpoint["checkpoint_hash"] = self._hash_checkpoint_payload(checkpoint_payload)
+        checkpoint["checkpoint_payload"] = self._b64url(checkpoint_payload)
+        checkpoint["checkpoint_signature"] = self._b64url(ed25519_private_key.sign(checkpoint_payload))
+
+        respx.get("https://vault.test/.well-known/jwks.json").mock(
+            return_value=Response(200, json=jwks_response)
+        )
+
+        result = client.verify_ledger_proof(
+            entries=[public_entry],
+            manifests=[checkpoint],
+        )
+
+        assert result.intact is True
+        assert result.verified_entries == 1
+        assert result.coverage_note is not None
+        assert "redacted public ledger entry" in result.coverage_note
+
+    @respx.mock
     @pytest.mark.asyncio
     async def test_verify_ledger_proof_async(
         self,

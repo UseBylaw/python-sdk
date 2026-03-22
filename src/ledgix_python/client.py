@@ -612,11 +612,16 @@ class LedgixClient:
             )
 
             latest_leaf_hash: str | None = None
+            coverage_notes: list[str] = []
+            redacted_entry_count = 0
             for entry in sorted_entries:
-                expected_event_hash = self._build_event_hash(entry)
-                if expected_event_hash != entry.event_hash:
-                    raise TokenVerificationError(f"Ledger event hash mismatch at seq {entry.seq}")
-                expected_leaf_hash = self._hash_leaf(expected_event_hash)
+                if self._has_protected_event_fields(entry):
+                    expected_event_hash = self._build_event_hash(entry)
+                    if expected_event_hash != entry.event_hash:
+                        raise TokenVerificationError(f"Ledger event hash mismatch at seq {entry.seq}")
+                else:
+                    redacted_entry_count += 1
+                expected_leaf_hash = self._hash_leaf(entry.event_hash)
                 if expected_leaf_hash != entry.leaf_hash:
                     raise TokenVerificationError(f"Ledger leaf hash mismatch at seq {entry.seq}")
                 if entry.receipt_algorithm != "Ed25519":
@@ -634,6 +639,12 @@ class LedgixClient:
                     payload_bytes,
                 )
                 latest_leaf_hash = entry.leaf_hash
+            if redacted_entry_count > 0:
+                coverage_notes.append(
+                    "Event-body hash recomputation was skipped for "
+                    f"{redacted_entry_count} redacted public ledger entr"
+                    f"{'y' if redacted_entry_count == 1 else 'ies'}; receipt and checkpoint proofs still verified."
+                )
 
             sorted_checkpoints = sorted(checkpoints, key=lambda item: item.checkpoint_id)
             previous_checkpoint_hash = ""
@@ -682,10 +693,12 @@ class LedgixClient:
                             "Latest checkpoint root does not match sequenced leaf hashes"
                         )
                 else:
-                    coverage_note = (
+                    coverage_notes.append(
                         f"Provided {len(sequenced_entries)} sequenced entries for tree size "
                         f"{latest_checkpoint.tree_size}; full root verification requires the complete covered set."
                     )
+            if coverage_notes:
+                coverage_note = " ".join(coverage_notes)
             return LedgerVerificationResult(
                 intact=True,
                 verified_entries=len(sorted_entries),
@@ -815,6 +828,9 @@ class LedgixClient:
             }
         )
         return self._hash_event_payload(payload)
+
+    def _has_protected_event_fields(self, entry: LedgerEntry) -> bool:
+        return isinstance(entry.intent_hash, str) and len(entry.intent_hash) > 0
 
     def _build_receipt_payload(self, entry: LedgerEntry) -> bytes:
         return self._encode_deterministic_cbor(
