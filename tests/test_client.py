@@ -659,6 +659,96 @@ class TestLedgerProofVerification:
         assert result.coverage_note is not None
         assert "redacted public ledger entry" in result.coverage_note
 
+    def test_verify_ledger_proof_bundle_with_later_checkpoint(
+        self,
+        client: LedgixClient,
+        ed25519_private_key,
+        jwks_response: dict,
+    ):
+        event = {
+            "seq": 21,
+            "event_uuid": "evt-21",
+            "request_id": "req-21",
+            "agent_id": "agent-21",
+            "policy_id": "policy-21",
+            "intent_hash": "intent-21",
+            "tool_name": "stripe_refund",
+            "tool_args": {"amount": 45},
+            "reason": "ok",
+            "citations": [],
+            "evidence_chunks": [],
+            "confidence": 0.91,
+            "approved": True,
+            "accepted_at": "2026-03-15T12:00:00Z",
+            "canonical_version": 1,
+            "event_hash": "",
+            "leaf_hash": "",
+            "leaf_index": 0,
+            "checkpoint_id": 21,
+            "receipt_algorithm": "Ed25519",
+            "receipt_key_id": "test-key-001",
+            "receipt_signature": "",
+            "receipt_payload": "",
+        }
+        event["event_hash"] = self._build_event_hash(event)
+        event["leaf_hash"] = self._hash_leaf(event["event_hash"])
+        receipt_payload = self._build_receipt_payload(event)
+        event["receipt_payload"] = self._b64url(receipt_payload)
+        event["receipt_signature"] = self._b64url(ed25519_private_key.sign(receipt_payload))
+
+        checkpoint = {
+            "checkpoint_id": 21,
+            "microblock_id": 21,
+            "tree_size": 1,
+            "root_hash": event["leaf_hash"],
+            "checkpoint_hash": "",
+            "prev_checkpoint_hash": "prev-checkpoint-hash-20",
+            "signature_algorithm": "Ed25519",
+            "signer_key_id": "test-key-001",
+            "checkpoint_signature": "",
+            "checkpoint_payload": "",
+            "signed_at": "2026-03-15T13:00:00Z",
+            "mmd_seconds": 30,
+            "export_target": "",
+            "export_uri": "",
+            "export_status": "",
+        }
+        checkpoint_payload = self._build_checkpoint_payload(checkpoint)
+        checkpoint["checkpoint_hash"] = self._hash_checkpoint_payload(checkpoint_payload)
+        checkpoint["checkpoint_payload"] = self._b64url(checkpoint_payload)
+        checkpoint["checkpoint_signature"] = self._b64url(ed25519_private_key.sign(checkpoint_payload))
+
+        public_jwk = self._b64url(json.dumps(jwks_response["keys"][0]).encode("utf-8"))
+        bundle = {
+            "event": event,
+            "inclusion": {
+                "event_uuid": event["event_uuid"],
+                "request_id": event["request_id"],
+                "event_hash": event["event_hash"],
+                "leaf_hash": event["leaf_hash"],
+                "leaf_index": 0,
+                "tree_size": 1,
+                "path": [],
+                "checkpoint": checkpoint,
+            },
+            "keys": [
+                {
+                    "key_id": "test-key-001",
+                    "algorithm": "Ed25519",
+                    "public_jwk": public_jwk,
+                    "active_from": "2026-03-15T11:00:00Z",
+                    "attestation_status": "verified",
+                }
+            ],
+        }
+
+        result = client.verify_ledger_proof_bundle(bundle)
+
+        assert result.intact is True
+        assert result.verified_entries == 1
+        assert result.verified_checkpoints == 1
+        assert result.latest_checkpoint_hash == checkpoint["checkpoint_hash"]
+
     @respx.mock
     @pytest.mark.asyncio
     async def test_verify_ledger_proof_async(

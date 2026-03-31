@@ -724,20 +724,7 @@ class LedgixClient:
 
     def _verify_ledger_proof_bundle(self, bundle: LedgerProofBundle) -> LedgerVerificationResult:
         verification_keys = self._resolve_verification_keys(bundle.keys)
-        result = self._verify_ledger_proof(
-            [bundle.event],
-            [bundle.inclusion.checkpoint],
-            key_records=verification_keys,
-        )
-        if not result.intact:
-            return result
-        if not self._verify_inclusion_proof(
-            bundle.event.leaf_hash,
-            bundle.inclusion.leaf_index,
-            bundle.inclusion.tree_size,
-            bundle.inclusion.path,
-            bundle.inclusion.checkpoint.root_hash,
-        ):
+        if not verification_keys:
             return LedgerVerificationResult(
                 intact=False,
                 verified_entries=0,
@@ -747,15 +734,123 @@ class LedgixClient:
                 latest_checkpoint_hash=None,
                 latest_manifest_hash=None,
                 coverage_note=None,
-                error="Ledger inclusion proof is invalid",
+                error="No JWKS available from Vault",
             )
-        if bundle.consistency and not self._verify_consistency_proof(
-            bundle.consistency.from_checkpoint.tree_size,
-            bundle.consistency.to_checkpoint.tree_size,
-            bundle.consistency.from_checkpoint.root_hash,
-            bundle.consistency.to_checkpoint.root_hash,
-            bundle.consistency.path,
-        ):
+
+        try:
+            key_cache: dict[str, Any] = {}
+
+            def key_for_kid(kid: str) -> Any:
+                if kid in key_cache:
+                    return key_cache[kid]
+                match = next(
+                    (
+                        item
+                        for item in verification_keys
+                        if isinstance(item, dict) and item.get("kid") == kid
+                    ),
+                    None,
+                )
+                if match is None:
+                    raise TokenVerificationError(f"No public key found for kid {kid}")
+                public_key = jwt.algorithms.OKPAlgorithm.from_jwk(json.dumps(match))
+                key_cache[kid] = public_key
+                return public_key
+
+            if self._has_protected_event_fields(bundle.event):
+                expected_event_hash = self._build_event_hash(bundle.event)
+                if expected_event_hash != bundle.event.event_hash:
+                    raise TokenVerificationError("Ledger event hash mismatch in proof bundle")
+            expected_leaf_hash = self._hash_leaf(bundle.event.event_hash)
+            if expected_leaf_hash != bundle.event.leaf_hash:
+                raise TokenVerificationError("Ledger leaf hash mismatch in proof bundle")
+            if bundle.event.receipt_algorithm != "Ed25519":
+                raise TokenVerificationError(
+                    f"Unsupported ledger receipt algorithm {bundle.event.receipt_algorithm}"
+                )
+            if (
+                not bundle.event.receipt_payload
+                or not bundle.event.receipt_signature
+                or not bundle.event.receipt_key_id
+            ):
+                raise TokenVerificationError("Missing receipt proof data in proof bundle")
+            payload_bytes = self._decode_base64url(bundle.event.receipt_payload)
+            rebuilt_payload = self._build_receipt_payload(bundle.event)
+            if payload_bytes != rebuilt_payload:
+                raise TokenVerificationError("Ledger receipt payload mismatch in proof bundle")
+            key_for_kid(bundle.event.receipt_key_id).verify(
+                self._decode_base64url(bundle.event.receipt_signature),
+                payload_bytes,
+            )
+
+            checkpoints = [bundle.inclusion.checkpoint]
+            if bundle.consistency:
+                if (
+                    bundle.consistency.from_checkpoint.checkpoint_hash
+                    != bundle.inclusion.checkpoint.checkpoint_hash
+                ):
+                    raise TokenVerificationError(
+                        "Ledger consistency proof does not match the inclusion checkpoint"
+                    )
+                checkpoints.append(bundle.consistency.to_checkpoint)
+
+            for checkpoint in checkpoints:
+                if checkpoint.signature_algorithm != "Ed25519":
+                    raise TokenVerificationError(
+                        f"Unsupported checkpoint signature algorithm {checkpoint.signature_algorithm}"
+                    )
+                if (
+                    not checkpoint.checkpoint_payload
+                    or not checkpoint.checkpoint_signature
+                    or not checkpoint.signer_key_id
+                ):
+                    raise TokenVerificationError(
+                        f"Missing checkpoint proof data at checkpoint {checkpoint.checkpoint_id}"
+                    )
+                checkpoint_payload = self._decode_base64url(checkpoint.checkpoint_payload)
+                rebuilt_checkpoint_payload = self._build_checkpoint_payload(checkpoint)
+                if checkpoint_payload != rebuilt_checkpoint_payload:
+                    raise TokenVerificationError("Ledger checkpoint payload mismatch in proof bundle")
+                if self._hash_checkpoint_payload(checkpoint_payload) != checkpoint.checkpoint_hash:
+                    raise TokenVerificationError("Ledger checkpoint hash mismatch in proof bundle")
+                key_for_kid(checkpoint.signer_key_id).verify(
+                    self._decode_base64url(checkpoint.checkpoint_signature),
+                    checkpoint_payload,
+                )
+
+            if not self._verify_inclusion_proof(
+                bundle.event.leaf_hash,
+                bundle.inclusion.leaf_index,
+                bundle.inclusion.tree_size,
+                bundle.inclusion.path,
+                bundle.inclusion.checkpoint.root_hash,
+            ):
+                raise TokenVerificationError("Ledger inclusion proof is invalid")
+            if bundle.consistency and not self._verify_consistency_proof(
+                bundle.consistency.from_checkpoint.tree_size,
+                bundle.consistency.to_checkpoint.tree_size,
+                bundle.consistency.from_checkpoint.root_hash,
+                bundle.consistency.to_checkpoint.root_hash,
+                bundle.consistency.path,
+            ):
+                raise TokenVerificationError("Ledger consistency proof is invalid")
+
+            latest_checkpoint_hash = (
+                bundle.consistency.to_checkpoint.checkpoint_hash
+                if bundle.consistency
+                else bundle.inclusion.checkpoint.checkpoint_hash
+            )
+            return LedgerVerificationResult(
+                intact=True,
+                verified_entries=1,
+                verified_checkpoints=2 if bundle.consistency else 1,
+                verified_manifests=2 if bundle.consistency else 1,
+                latest_leaf_hash=bundle.event.leaf_hash,
+                latest_checkpoint_hash=latest_checkpoint_hash,
+                latest_manifest_hash=latest_checkpoint_hash,
+                coverage_note=None,
+            )
+        except Exception as exc:
             return LedgerVerificationResult(
                 intact=False,
                 verified_entries=0,
@@ -765,26 +860,8 @@ class LedgixClient:
                 latest_checkpoint_hash=None,
                 latest_manifest_hash=None,
                 coverage_note=None,
-                error="Ledger consistency proof is invalid",
+                error=str(exc),
             )
-        return LedgerVerificationResult(
-            intact=True,
-            verified_entries=1,
-            verified_checkpoints=2 if bundle.consistency else 1,
-            verified_manifests=2 if bundle.consistency else 1,
-            latest_leaf_hash=bundle.event.leaf_hash,
-            latest_checkpoint_hash=(
-                bundle.consistency.to_checkpoint.checkpoint_hash
-                if bundle.consistency
-                else bundle.inclusion.checkpoint.checkpoint_hash
-            ),
-            latest_manifest_hash=(
-                bundle.consistency.to_checkpoint.checkpoint_hash
-                if bundle.consistency
-                else bundle.inclusion.checkpoint.checkpoint_hash
-            ),
-            coverage_note=None,
-        )
 
     def _resolve_verification_keys(
         self,
