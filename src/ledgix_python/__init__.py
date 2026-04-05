@@ -27,12 +27,15 @@ from .client import LedgixClient
 from .config import VaultConfig
 from .enforce import (
     VaultContext,
+    auto_instrument,
     configure,
     current_clearance,
     current_token,
     enforce,
+    tool,
     vault_enforce,
 )
+from .manifest import Manifest, ManifestRule, load_manifest
 from .exceptions import (
     ClearanceDeniedError,
     ManualReviewTimeoutError,
@@ -67,6 +70,12 @@ __all__ = [
     "enforce",
     "current_clearance",
     "current_token",
+    # Manifest / auto-instrumentation
+    "auto_instrument",
+    "tool",
+    "load_manifest",
+    "Manifest",
+    "ManifestRule",
     # Explicit API
     "vault_enforce",
     "VaultContext",

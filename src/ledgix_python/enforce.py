@@ -6,12 +6,18 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import functools
+import importlib
 import inspect
+import pkgutil
+import sys
+import types
+from pathlib import Path
 from typing import Any, Callable, TypeVar
 
 from .client import LedgixClient
 from .config import VaultConfig
 from .exceptions import ClearanceDeniedError
+from .manifest import Manifest, ManifestRule, load_manifest
 from .models import ClearanceRequest, ClearanceResponse
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -24,6 +30,7 @@ _default_client: LedgixClient | None = None
 _current_clearance: contextvars.ContextVar[ClearanceResponse | None] = contextvars.ContextVar(
     "_ledgix_clearance", default=None
 )
+_manifest: Manifest | None = None
 
 
 def configure(config: VaultConfig | None = None, **kwargs: Any) -> LedgixClient:
@@ -82,6 +89,168 @@ def current_token() -> str | None:
     if clearance is None:
         return None
     return clearance.token
+
+
+# ---------------------------------------------------------------------------
+# Manifest-driven auto-instrumentation
+# ---------------------------------------------------------------------------
+
+def auto_instrument(
+    *modules: types.ModuleType,
+    manifest: str | Path | dict[str, Any] | Manifest | None = None,
+    recurse: bool = False,
+) -> list[str]:
+    """Scan modules and wrap matching functions according to a manifest.
+
+    Call once at startup after :func:`configure`::
+
+        import tools
+        import ledgix_python as ledgix
+
+        ledgix.configure(agent_id="my-agent")
+        ledgix.auto_instrument(tools)          # reads ledgix.yaml from CWD
+
+    Or point at a specific manifest::
+
+        ledgix.auto_instrument(tools, manifest="config/ledgix.yaml")
+        ledgix.auto_instrument(tools, manifest={"enforce": [
+            {"tool": "stripe_*", "policy_id": "financial-high-risk"},
+        ]})
+
+    Only functions *defined* in the scanned module are wrapped — functions
+    imported into it are skipped.  If you have tools outside the scanned
+    modules use the :func:`tool` decorator as an escape hatch.
+
+    .. warning::
+        Call ``auto_instrument`` before other modules import the tool functions.
+        Monkey-patching updates the module namespace, but existing references
+        held by already-imported modules will not be retroactively wrapped.
+
+    Args:
+        *modules: One or more modules (or packages when *recurse* is ``True``)
+            to scan.
+        manifest: Path to a manifest file, an inline ``dict``, a pre-built
+            :class:`~ledgix_python.Manifest`, or ``None`` to auto-discover
+            ``ledgix.yaml`` / ``ledgix.yml`` / ``ledgix.json`` in the CWD.
+        recurse: If ``True``, also scan sub-packages of any package module.
+
+    Returns:
+        Sorted list of qualified names that were wrapped,
+        e.g. ``["tools.stripe_payment", "tools.issue_refund"]``.
+    """
+    global _manifest
+
+    if isinstance(manifest, Manifest):
+        _manifest = manifest
+    else:
+        _manifest = load_manifest(manifest)
+
+    wrapped: list[str] = []
+    for module in modules:
+        wrapped.extend(_instrument_module(module, _manifest, recurse=recurse))
+    return sorted(wrapped)
+
+
+def _instrument_module(
+    module: types.ModuleType,
+    manifest: Manifest,
+    *,
+    recurse: bool,
+) -> list[str]:
+    """Walk *module* and monkey-patch functions that match a manifest rule."""
+    wrapped: list[str] = []
+    mod_name = module.__name__
+
+    for attr_name, obj in inspect.getmembers(module, inspect.isfunction):
+        if attr_name.startswith("_"):
+            continue
+        # Skip functions that were imported into this module from elsewhere.
+        if obj.__module__ != mod_name:
+            continue
+        rule = manifest.match(attr_name)
+        if rule is None:
+            continue
+        setattr(module, attr_name, _wrap_with_rule(obj, attr_name, rule))
+        wrapped.append(f"{mod_name}.{attr_name}")
+
+    if recurse and hasattr(module, "__path__"):
+        for _, submod_name, _ in pkgutil.walk_packages(
+            module.__path__, prefix=mod_name + "."
+        ):
+            submod = sys.modules.get(submod_name)
+            if submod is None:
+                submod = importlib.import_module(submod_name)
+            wrapped.extend(_instrument_module(submod, manifest, recurse=False))
+
+    return wrapped
+
+
+def _wrap_with_rule(func: F, name: str, rule: ManifestRule) -> F:
+    """Apply :func:`enforce` to *func* using settings from *rule*."""
+    return enforce(
+        tool_name=name,
+        policy_id=rule.policy_id,
+        context=rule.context if rule.context else None,
+    )(func)
+
+
+def tool(
+    func: F | None = None,
+    *,
+    tool_name: str | None = None,
+    policy_id: str | None = None,
+    context: dict[str, Any] | None = None,
+) -> F | Callable[[F], F]:
+    """Decorator to enforce Vault clearance on a single function.
+
+    Use this as an escape hatch for functions that live outside the modules
+    passed to :func:`auto_instrument`.  If a manifest has been loaded its
+    rules are applied first; explicit keyword arguments always take precedence.
+
+    Works with or without call parentheses::
+
+        @ledgix.tool
+        def my_fn(amount: float):
+            token = ledgix.current_token()
+            ...
+
+        @ledgix.tool(policy_id="financial-high-risk")
+        def stripe_charge(amount: float, customer_id: str):
+            token = ledgix.current_token()
+            ...
+
+    Args:
+        func: The function to wrap (populated automatically when the decorator
+            is used without parentheses).
+        tool_name: Override the tool name used in the clearance request
+            (defaults to ``func.__name__``).
+        policy_id: Policy ID override (manifest match used when omitted).
+        context: Extra key/value pairs forwarded to the clearance request.
+    """
+    def decorator(f: F) -> F:
+        resolved_name = tool_name or f.__name__
+        resolved_policy = policy_id
+        resolved_context: dict[str, Any] = dict(context or {})
+
+        # Apply manifest rule if available, explicit kwargs take precedence.
+        if _manifest is not None:
+            rule = _manifest.match(resolved_name)
+            if rule is not None:
+                if resolved_policy is None:
+                    resolved_policy = rule.policy_id
+                resolved_context = {**rule.context, **resolved_context}
+
+        return enforce(
+            tool_name=resolved_name,
+            policy_id=resolved_policy,
+            context=resolved_context or None,
+        )(f)
+
+    if func is not None:
+        # @ledgix.tool  — called without parentheses
+        return decorator(func)
+    # @ledgix.tool(...)  — called with arguments
+    return decorator
 
 
 # ---------------------------------------------------------------------------
