@@ -8,6 +8,7 @@ from typing import Any, Type
 from pydantic import BaseModel
 
 from ..client import LedgixClient
+from ..enforce import _get_default_client
 from ..exceptions import ClearanceDeniedError
 from ..models import ClearanceRequest
 
@@ -23,25 +24,22 @@ except ImportError as exc:
 class LedgixCrewAITool(CrewAIBaseTool):
     """Wraps a CrewAI tool with Vault clearance enforcement.
 
-    Usage::
+    Usage with explicit client::
 
         from crewai.tools import BaseTool
         from ledgix_python.adapters.crewai import LedgixCrewAITool
 
-        class MyTool(BaseTool):
-            name = "search"
-            description = "Search the web"
-
-            def _run(self, query: str) -> str:
-                return f"Results for {query}"
-
         guarded = LedgixCrewAITool.wrap(client, MyTool())
+
+    Usage after :func:`ledgix_python.configure`::
+
+        guarded = LedgixCrewAITool.wrap(MyTool())
     """
 
     name: str = ""
     description: str = ""
     _inner_tool: CrewAIBaseTool
-    _client: LedgixClient
+    _client: LedgixClient | None
     _policy_id: str | None
 
     class Config:
@@ -51,7 +49,7 @@ class LedgixCrewAITool(CrewAIBaseTool):
     def __init__(
         self,
         inner_tool: CrewAIBaseTool,
-        client: LedgixClient,
+        client: LedgixClient | None = None,
         *,
         policy_id: str | None = None,
     ) -> None:
@@ -63,18 +61,30 @@ class LedgixCrewAITool(CrewAIBaseTool):
         self._client = client
         self._policy_id = policy_id
 
+    def _resolve_client(self) -> LedgixClient:
+        return self._client if self._client is not None else _get_default_client()
+
     @classmethod
     def wrap(
         cls,
-        client: LedgixClient,
-        tool: CrewAIBaseTool,
+        client_or_tool: LedgixClient | CrewAIBaseTool,
+        tool: CrewAIBaseTool | None = None,
         *,
         policy_id: str | None = None,
     ) -> LedgixCrewAITool:
-        """Convenience factory to wrap a CrewAI tool."""
-        return cls(inner_tool=tool, client=client, policy_id=policy_id)
+        """Convenience factory to wrap a CrewAI tool.
+
+        Supports two call signatures:
+
+        - ``LedgixCrewAITool.wrap(client, tool, policy_id=...)`` — explicit client
+        - ``LedgixCrewAITool.wrap(tool, policy_id=...)`` — uses global client from :func:`ledgix_python.configure`
+        """
+        if isinstance(client_or_tool, LedgixClient):
+            return cls(inner_tool=tool, client=client_or_tool, policy_id=policy_id)  # type: ignore[arg-type]
+        return cls(inner_tool=client_or_tool, client=None, policy_id=policy_id)
 
     def _run(self, **kwargs: Any) -> Any:
+        client = self._resolve_client()
         ctx: dict[str, Any] = {}
         if self._policy_id:
             ctx["policy_id"] = self._policy_id
@@ -82,13 +92,13 @@ class LedgixCrewAITool(CrewAIBaseTool):
         request = ClearanceRequest(
             tool_name=self._inner_tool.name,
             tool_args=kwargs,
-            agent_id=self._client.config.agent_id,
-            session_id=self._client.config.session_id,
+            agent_id=client.config.agent_id,
+            session_id=client.config.session_id,
             context=ctx,
         )
 
         try:
-            self._client.request_clearance(request)
+            client.request_clearance(request)
         except ClearanceDeniedError as exc:
             return f"BLOCKED: Vault denied this action — {exc.reason}"
 

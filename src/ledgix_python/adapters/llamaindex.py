@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..client import LedgixClient
+from ..enforce import _get_default_client
 from ..exceptions import ClearanceDeniedError
 from ..models import ClearanceRequest
 
@@ -21,24 +22,23 @@ except ImportError as exc:
 class LedgixToolWrapper:
     """Wraps a LlamaIndex tool with Vault clearance enforcement.
 
-    Usage::
+    Usage with explicit client::
 
         from llama_index.core.tools import FunctionTool
         from ledgix_python.adapters.llamaindex import LedgixToolWrapper
 
-        def my_tool(query: str) -> str:
-            return f"Result for {query}"
-
         tool = FunctionTool.from_defaults(fn=my_tool, name="search")
         guarded = LedgixToolWrapper(client, tool)
 
-        # Use guarded.tool in your LlamaIndex agent
+    Usage after :func:`ledgix_python.configure`::
+
+        guarded = LedgixToolWrapper(tool=tool)
     """
 
     def __init__(
         self,
-        client: LedgixClient,
-        tool: FunctionTool,
+        client: LedgixClient | None = None,
+        tool: FunctionTool | None = None,
         *,
         policy_id: str | None = None,
     ) -> None:
@@ -49,37 +49,49 @@ class LedgixToolWrapper:
         # Create the wrapped tool
         self.tool = FunctionTool.from_defaults(
             fn=self._guarded_call,
-            name=f"ledgix_{tool.metadata.name}",
-            description=tool.metadata.description or "",
+            name=f"ledgix_{tool.metadata.name}",  # type: ignore[union-attr]
+            description=tool.metadata.description or "",  # type: ignore[union-attr]
         )
+
+    def _resolve_client(self) -> LedgixClient:
+        return self._client if self._client is not None else _get_default_client()
 
     def _guarded_call(self, **kwargs: Any) -> Any:
         """Wrapper that requests clearance before calling the inner tool."""
+        client = self._resolve_client()
         ctx: dict[str, Any] = {}
         if self._policy_id:
             ctx["policy_id"] = self._policy_id
 
         request = ClearanceRequest(
-            tool_name=self._inner_tool.metadata.name,
+            tool_name=self._inner_tool.metadata.name,  # type: ignore[union-attr]
             tool_args=kwargs,
-            agent_id=self._client.config.agent_id,
-            session_id=self._client.config.session_id,
+            agent_id=client.config.agent_id,
+            session_id=client.config.session_id,
             context=ctx,
         )
 
-        self._client.request_clearance(request)
-        return self._inner_tool.call(**kwargs)
+        client.request_clearance(request)
+        return self._inner_tool.call(**kwargs)  # type: ignore[union-attr]
 
 
 def wrap_tool(
-    client: LedgixClient,
-    tool: FunctionTool,
+    client_or_tool: LedgixClient | FunctionTool,
+    tool: FunctionTool | None = None,
     *,
     policy_id: str | None = None,
 ) -> FunctionTool:
-    """Convenience function to wrap a LlamaIndex tool.
+    """Wrap a LlamaIndex tool with Vault clearance enforcement.
 
     Returns the guarded FunctionTool ready for use in an agent.
+
+    Supports two call signatures:
+
+    - ``wrap_tool(client, tool, policy_id=...)`` — explicit client
+    - ``wrap_tool(tool, policy_id=...)`` — uses global client from :func:`ledgix_python.configure`
     """
-    wrapper = LedgixToolWrapper(client, tool, policy_id=policy_id)
+    if isinstance(client_or_tool, LedgixClient):
+        wrapper = LedgixToolWrapper(client_or_tool, tool, policy_id=policy_id)
+    else:
+        wrapper = LedgixToolWrapper(None, client_or_tool, policy_id=policy_id)
     return wrapper.tool

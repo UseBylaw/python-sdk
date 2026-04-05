@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..client import LedgixClient
+from ..enforce import _get_default_client
 from ..exceptions import ClearanceDeniedError
 from ..models import ClearanceRequest
 
@@ -28,11 +29,19 @@ class LedgixCallbackHandler(BaseCallbackHandler):
 
         handler = LedgixCallbackHandler(client)
         agent = create_agent(callbacks=[handler])
+
+    If :func:`ledgix_python.configure` has been called, *client* may be omitted::
+
+        handler = LedgixCallbackHandler()
     """
 
-    def __init__(self, client: LedgixClient, *, policy_id: str | None = None) -> None:
-        self.client = client
+    def __init__(self, client: LedgixClient | None = None, *, policy_id: str | None = None) -> None:
+        self._client = client
         self.policy_id = policy_id
+
+    @property
+    def client(self) -> LedgixClient:
+        return self._client if self._client is not None else _get_default_client()
 
     def on_tool_start(
         self,
@@ -71,18 +80,22 @@ class LedgixCallbackHandler(BaseCallbackHandler):
 class LedgixTool(BaseTool):
     """Wraps an existing LangChain tool with Vault clearance enforcement.
 
-    Usage::
+    Usage with explicit client::
 
         from langchain_community.tools import SomeTool
         from ledgix_python.adapters.langchain import LedgixTool
 
         guarded_tool = LedgixTool.wrap(client, SomeTool(), policy_id="refund-policy")
+
+    Usage after :func:`ledgix_python.configure`::
+
+        guarded_tool = LedgixTool.wrap(SomeTool(), policy_id="refund-policy")
     """
 
     name: str = ""
     description: str = ""
     _inner_tool: BaseTool
-    _client: LedgixClient
+    _client: LedgixClient | None
     _policy_id: str | None
 
     class Config:
@@ -92,7 +105,7 @@ class LedgixTool(BaseTool):
     def __init__(
         self,
         inner_tool: BaseTool,
-        client: LedgixClient,
+        client: LedgixClient | None = None,
         *,
         policy_id: str | None = None,
     ) -> None:
@@ -104,18 +117,31 @@ class LedgixTool(BaseTool):
         self._client = client
         self._policy_id = policy_id
 
+    def _resolve_client(self) -> LedgixClient:
+        return self._client if self._client is not None else _get_default_client()
+
     @classmethod
     def wrap(
         cls,
-        client: LedgixClient,
-        tool: BaseTool,
+        client_or_tool: LedgixClient | BaseTool,
+        tool: BaseTool | None = None,
         *,
         policy_id: str | None = None,
     ) -> LedgixTool:
-        """Convenience factory to wrap a tool."""
-        return cls(inner_tool=tool, client=client, policy_id=policy_id)
+        """Convenience factory to wrap a tool.
+
+        Supports two call signatures:
+
+        - ``LedgixTool.wrap(client, tool, policy_id=...)`` — explicit client
+        - ``LedgixTool.wrap(tool, policy_id=...)`` — uses global client from :func:`ledgix_python.configure`
+        """
+        if isinstance(client_or_tool, LedgixClient):
+            return cls(inner_tool=tool, client=client_or_tool, policy_id=policy_id)  # type: ignore[arg-type]
+        # client_or_tool is actually the tool; no explicit client
+        return cls(inner_tool=client_or_tool, client=None, policy_id=policy_id)
 
     def _run(self, *args: Any, **kwargs: Any) -> Any:
+        client = self._resolve_client()
         ctx: dict[str, Any] = {}
         if self._policy_id:
             ctx["policy_id"] = self._policy_id
@@ -123,19 +149,20 @@ class LedgixTool(BaseTool):
         request = ClearanceRequest(
             tool_name=self._inner_tool.name,
             tool_args=kwargs or ({"input": args[0]} if args else {}),
-            agent_id=self._client.config.agent_id,
-            session_id=self._client.config.session_id,
+            agent_id=client.config.agent_id,
+            session_id=client.config.session_id,
             context=ctx,
         )
 
         try:
-            self._client.request_clearance(request)
+            client.request_clearance(request)
         except ClearanceDeniedError as exc:
             raise ToolException(f"Vault denied: {exc.reason}") from exc
 
         return self._inner_tool._run(*args, **kwargs)
 
     async def _arun(self, *args: Any, **kwargs: Any) -> Any:
+        client = self._resolve_client()
         ctx: dict[str, Any] = {}
         if self._policy_id:
             ctx["policy_id"] = self._policy_id
@@ -143,13 +170,13 @@ class LedgixTool(BaseTool):
         request = ClearanceRequest(
             tool_name=self._inner_tool.name,
             tool_args=kwargs or ({"input": args[0]} if args else {}),
-            agent_id=self._client.config.agent_id,
-            session_id=self._client.config.session_id,
+            agent_id=client.config.agent_id,
+            session_id=client.config.session_id,
             context=ctx,
         )
 
         try:
-            await self._client.arequest_clearance(request)
+            await client.arequest_clearance(request)
         except ClearanceDeniedError as exc:
             raise ToolException(f"Vault denied: {exc.reason}") from exc
 

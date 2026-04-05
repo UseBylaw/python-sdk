@@ -1,7 +1,17 @@
 # Ledgix ALCV — Python SDK
 # Agent-agnostic compliance shim for SOX 404 policy enforcement
 #
-# Usage:
+# Recommended usage:
+#   import ledgix_python as ledgix
+#
+#   ledgix.configure(agent_id="finance-agent")
+#
+#   @ledgix.enforce(tool_name="stripe_refund")
+#   def process_refund(amount: float, reason: str):
+#       token = ledgix.current_token()
+#       ...
+#
+# Explicit API (advanced):
 #   from ledgix_python import LedgixClient, vault_enforce, VaultConfig
 #
 #   client = LedgixClient()
@@ -15,7 +25,14 @@
 
 from .client import LedgixClient
 from .config import VaultConfig
-from .enforce import VaultContext, vault_enforce
+from .enforce import (
+    VaultContext,
+    configure,
+    current_clearance,
+    current_token,
+    enforce,
+    vault_enforce,
+)
 from .exceptions import (
     ClearanceDeniedError,
     ManualReviewTimeoutError,
@@ -45,7 +62,12 @@ __all__ = [
     # Core
     "LedgixClient",
     "VaultConfig",
-    # Enforcement
+    # Low-code API
+    "configure",
+    "enforce",
+    "current_clearance",
+    "current_token",
+    # Explicit API
     "vault_enforce",
     "VaultContext",
     # Models
