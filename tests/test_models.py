@@ -47,6 +47,44 @@ class TestClearanceRequest:
         restored = ClearanceRequest.model_validate_json(json_str)
         assert restored == req
 
+    def test_phase_2_processing_register_fields(self):
+        """Phase 2 (0.3.1): data_categories / purpose / processing_register_ref
+        survive a JSON round-trip and default to None when omitted."""
+        req = ClearanceRequest(
+            tool_name="customer_export",
+            data_categories=["customer_email", "transaction_amount"],
+            purpose="billing",
+            processing_register_ref="00000000-0000-0000-0000-000000000001",
+        )
+        assert req.data_categories == ["customer_email", "transaction_amount"]
+        assert req.purpose == "billing"
+        assert req.processing_register_ref == "00000000-0000-0000-0000-000000000001"
+
+        restored = ClearanceRequest.model_validate_json(req.model_dump_json())
+        assert restored.data_categories == req.data_categories
+        assert restored.purpose == req.purpose
+        assert restored.processing_register_ref == req.processing_register_ref
+
+        # Defaults are None when omitted.
+        bare = ClearanceRequest(tool_name="x")
+        assert bare.data_categories is None
+        assert bare.purpose is None
+        assert bare.processing_register_ref is None
+
+    def test_phase_6_dataset_ref_field(self):
+        """Phase 6 (0.3.1): dataset_ref survives a JSON round-trip."""
+        req = ClearanceRequest(
+            tool_name="kb_search",
+            dataset_ref="prod_customer_support_kb",
+        )
+        assert req.dataset_ref == "prod_customer_support_kb"
+
+        restored = ClearanceRequest.model_validate_json(req.model_dump_json())
+        assert restored.dataset_ref == req.dataset_ref
+
+        bare = ClearanceRequest(tool_name="x")
+        assert bare.dataset_ref is None
+
 
 class TestClearanceResponse:
     def test_approved(self):

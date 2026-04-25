@@ -44,6 +44,30 @@ class ClearanceRequest(BaseModel):
         default=None,
         description="Account/org/workspace ref within the provider (e.g. Stripe acct id, Slack team id)",
     )
+    # Phase 2 — GDPR Article 30 processing-register matching.
+    # When supplied, the Vault's pre-LLM validator chain checks for an active
+    # processing register that covers (data_categories ⊇ requested,
+    # purpose ∈ register.purposes, recipient ∈ register.recipients). Unmatched
+    # requests are denied with reason_code='processing_no_register_match'.
+    data_categories: list[str] | None = Field(
+        default=None,
+        description="Personal-data categories this action will touch (e.g. ['customer_email','transaction_amount'])",
+    )
+    purpose: str | None = Field(
+        default=None,
+        description="Purpose of processing (e.g. 'fraud_detection', 'billing'); must be in matched register's purposes",
+    )
+    processing_register_ref: str | None = Field(
+        default=None,
+        description="Optional UUID hint of which register this action anchors to; Vault still does authoritative match",
+    )
+    # Phase 6 — dataset lineage. When supplied, dataset sheets auto-derive
+    # row counts, schema fingerprints, and consent-basis breakdowns from
+    # ledger replay scoped to events with this ref.
+    dataset_ref: str | None = Field(
+        default=None,
+        description="Logical dataset reference this action reads/writes (e.g. 'prod_customer_support_kb', S3 path, table name)",
+    )
 
 
 class ClearanceResponse(BaseModel):

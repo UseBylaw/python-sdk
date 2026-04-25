@@ -197,6 +197,12 @@ def tool(
     tool_name: str | None = None,
     policy_id: str | None = None,
     context: dict[str, Any] | None = None,
+    # Phase 2 — GDPR Article 30 processing-register matching.
+    data_categories: list[str] | None = None,
+    purpose: str | None = None,
+    processing_register_ref: str | None = None,
+    # Phase 6 — dataset lineage.
+    dataset_ref: str | None = None,
 ) -> F | Callable[[F], F]:
     """Decorator to enforce Vault clearance on a single function.
 
@@ -223,6 +229,11 @@ def tool(
             (defaults to ``func.__name__``).
         policy_id: Policy ID override (manifest match used when omitted).
         context: Extra key/value pairs forwarded to the clearance request.
+        data_categories: Personal-data categories this action will touch
+            (Phase 2 register matching).
+        purpose: Purpose of processing (Phase 2 register matching).
+        processing_register_ref: Optional UUID hint of the matching register.
+        dataset_ref: Logical dataset ref this action reads/writes (Phase 6).
     """
     def decorator(f: F) -> F:
         resolved_name = tool_name or f.__name__
@@ -241,6 +252,10 @@ def tool(
             tool_name=resolved_name,
             policy_id=resolved_policy,
             context=resolved_context or None,
+            data_categories=data_categories,
+            purpose=purpose,
+            processing_register_ref=processing_register_ref,
+            dataset_ref=dataset_ref,
         )(f)
 
     if func is not None:
@@ -260,6 +275,12 @@ def enforce(
     policy_id: str | None = None,
     context: dict[str, Any] | None = None,
     on_review_pending: Callable[[PendingApproval], None] | None = None,
+    # Phase 2 — GDPR Article 30 processing-register matching.
+    data_categories: list[str] | None = None,
+    purpose: str | None = None,
+    processing_register_ref: str | None = None,
+    # Phase 6 — dataset lineage.
+    dataset_ref: str | None = None,
 ) -> Callable[[F], F]:
     """Decorator that enforces Vault clearance before a function executes.
 
@@ -301,6 +322,10 @@ def enforce(
                     agent_id=client.config.agent_id,
                     session_id=client.config.session_id,
                     context={**(context or {}), **({"policy_id": policy_id} if policy_id else {})},
+                    data_categories=data_categories,
+                    purpose=purpose,
+                    processing_register_ref=processing_register_ref,
+                    dataset_ref=dataset_ref,
                 )
                 try:
                     clearance = await client.arequest_clearance(request)
@@ -327,6 +352,10 @@ def enforce(
                     agent_id=client.config.agent_id,
                     session_id=client.config.session_id,
                     context={**(context or {}), **({"policy_id": policy_id} if policy_id else {})},
+                    data_categories=data_categories,
+                    purpose=purpose,
+                    processing_register_ref=processing_register_ref,
+                    dataset_ref=dataset_ref,
                 )
                 try:
                     clearance = client.request_clearance(request)
@@ -372,12 +401,20 @@ class VaultContext:
         *,
         context: dict[str, Any] | None = None,
         policy_id: str | None = None,
+        data_categories: list[str] | None = None,
+        purpose: str | None = None,
+        processing_register_ref: str | None = None,
+        dataset_ref: str | None = None,
     ) -> None:
         self.client = client
         self.tool_name = tool_name
         self.tool_args = tool_args or {}
         self.context = context or {}
         self.policy_id = policy_id
+        self.data_categories = data_categories
+        self.purpose = purpose
+        self.processing_register_ref = processing_register_ref
+        self.dataset_ref = dataset_ref
         self.clearance: ClearanceResponse | None = None
 
     def _build_request(self) -> ClearanceRequest:
@@ -390,6 +427,10 @@ class VaultContext:
             agent_id=self.client.config.agent_id,
             session_id=self.client.config.session_id,
             context=ctx,
+            data_categories=self.data_categories,
+            purpose=self.purpose,
+            processing_register_ref=self.processing_register_ref,
+            dataset_ref=self.dataset_ref,
         )
 
     # Sync context manager
@@ -417,6 +458,10 @@ def vault_enforce(
     tool_name: str | None = None,
     policy_id: str | None = None,
     context: dict[str, Any] | None = None,
+    data_categories: list[str] | None = None,
+    purpose: str | None = None,
+    processing_register_ref: str | None = None,
+    dataset_ref: str | None = None,
 ) -> Callable[[F], F]:
     """Decorator that enforces Vault clearance before a function executes.
 
@@ -454,6 +499,10 @@ def vault_enforce(
                     agent_id=client.config.agent_id,
                     session_id=client.config.session_id,
                     context={**(context or {}), **({"policy_id": policy_id} if policy_id else {})},
+                    data_categories=data_categories,
+                    purpose=purpose,
+                    processing_register_ref=processing_register_ref,
+                    dataset_ref=dataset_ref,
                 )
                 clearance = await client.arequest_clearance(request)
                 kwargs["_clearance"] = clearance
@@ -471,6 +520,10 @@ def vault_enforce(
                     agent_id=client.config.agent_id,
                     session_id=client.config.session_id,
                     context={**(context or {}), **({"policy_id": policy_id} if policy_id else {})},
+                    data_categories=data_categories,
+                    purpose=purpose,
+                    processing_register_ref=processing_register_ref,
+                    dataset_ref=dataset_ref,
                 )
                 clearance = client.request_clearance(request)
                 kwargs["_clearance"] = clearance

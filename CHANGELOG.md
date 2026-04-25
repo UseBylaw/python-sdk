@@ -5,6 +5,31 @@ All notable changes to `ledgix-python` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1]
+
+### Added
+- `ClearanceRequest.data_categories`, `purpose`, and
+  `processing_register_ref` — Phase 2 GDPR Article 30 processing-register
+  matching. When set, the Vault's pre-LLM validator chain checks for an
+  active register that covers the (data_categories ⊇ requested,
+  purpose ∈ register.purposes, recipient ∈ register.recipients) tuple.
+  Unmatched requests deny with `reason_code='processing_no_register_match'`.
+- `ClearanceRequest.dataset_ref` — Phase 6 dataset lineage. Logical
+  reference (filename, S3 path, table name, etc.) for the production
+  data this action reads/writes. Auto-derived dataset sheets group on
+  this field for row counts, schema fingerprints, and consent-basis
+  breakdowns.
+- All four fields are also surfaced as kwargs on `enforce()`, `tool()`,
+  `vault_enforce()`, and `VaultContext` so the high-level decorator API
+  can populate them without dropping to `LedgixClient.request_clearance`.
+- `/mint-token` cache-replay forwards the new fields alongside the 0.3.0
+  destination set.
+
+### Compatibility
+- Backwards-compatible. All four fields are optional. Vault ignores
+  unknown wire fields prior to the matching schema migration; older SDKs
+  continue to work against the new Vault.
+
 ## [0.3.0]
 
 ### Added

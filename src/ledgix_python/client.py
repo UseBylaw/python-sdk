@@ -353,6 +353,10 @@ class LedgixClient:
             "destination_uri": request.destination_uri or "",
             "destination_provider": request.destination_provider or "",
             "destination_account_ref": request.destination_account_ref or "",
+            "data_categories": request.data_categories or [],
+            "purpose": request.purpose or "",
+            "processing_register_ref": request.processing_register_ref or "",
+            "dataset_ref": request.dataset_ref or "",
         }
         idem_headers = {"Idempotency-Key": str(uuid.uuid4())}
         try:
@@ -395,6 +399,10 @@ class LedgixClient:
             "destination_uri": request.destination_uri or "",
             "destination_provider": request.destination_provider or "",
             "destination_account_ref": request.destination_account_ref or "",
+            "data_categories": request.data_categories or [],
+            "purpose": request.purpose or "",
+            "processing_register_ref": request.processing_register_ref or "",
+            "dataset_ref": request.dataset_ref or "",
         }
         idem_headers = {"Idempotency-Key": str(uuid.uuid4())}
         try:
