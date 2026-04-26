@@ -89,41 +89,41 @@ class TestClearanceRequest:
 class TestClearanceResponse:
     def test_approved(self):
         resp = ClearanceResponse(
-            approved=True,
+            decision_status="approved",
             token="eyJ...",
             reason="All good",
             request_id="req-1",
         )
-        assert resp.approved is True
+        assert resp.is_approved is True
         assert resp.token == "eyJ..."
 
     def test_denied(self):
         resp = ClearanceResponse(
-            approved=False,
+            decision_status="denied",
             reason="Policy violation",
             request_id="req-2",
         )
-        assert resp.approved is False
+        assert resp.is_approved is False
         assert resp.token is None
 
     def test_from_dict(self):
         data = {
-            "approved": True,
+            "decision_status": "approved",
             "token": "abc",
             "reason": "ok",
             "request_id": "r1",
         }
         resp = ClearanceResponse.model_validate(data)
-        assert resp.approved is True
+        assert resp.is_approved is True
 
     def test_policy_version_fields_default_none(self):
-        resp = ClearanceResponse(approved=True)
+        resp = ClearanceResponse(decision_status="approved")
         assert resp.policy_version_id is None
         assert resp.policy_content_hash is None
 
     def test_policy_version_fields_round_trip(self):
         data = {
-            "approved": True,
+            "decision_status": "approved",
             "token": "tok",
             "request_id": "r1",
             "policy_version_id": "3b6b2e1d-9d7d-4a32-9f6e-54a4b0ee8e11",

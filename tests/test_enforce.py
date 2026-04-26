@@ -163,7 +163,7 @@ class TestVaultContext:
 
         with VaultContext(client, "refund_tool", {"amount": 45}) as ctx:
             assert ctx.clearance is not None
-            assert ctx.clearance.approved is True
+            assert ctx.clearance.is_approved is True
             assert ctx.clearance.token is not None
 
     @respx.mock
@@ -185,7 +185,7 @@ class TestVaultContext:
 
         async with VaultContext(client, "refund_tool", {"amount": 45}) as ctx:
             assert ctx.clearance is not None
-            assert ctx.clearance.approved is True
+            assert ctx.clearance.is_approved is True
 
     @respx.mock
     @pytest.mark.asyncio

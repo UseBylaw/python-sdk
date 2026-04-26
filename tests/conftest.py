@@ -161,7 +161,7 @@ def client_with_jwt(vault_config_with_jwt: VaultConfig) -> LedgixClient:
 def approved_response(sample_jwt: str) -> dict:
     return {
         "status": "approved",
-        "approved": True,
+        "decision_status": "approved",
         "token": sample_jwt,
         "reason": "Policy check passed",
         "request_id": "req-001",
@@ -172,7 +172,7 @@ def approved_response(sample_jwt: str) -> dict:
 def denied_response() -> dict:
     return {
         "status": "denied",
-        "approved": False,
+        "decision_status": "denied",
         "token": None,
         "reason": "Amount exceeds $100 limit",
         "request_id": "req-002",

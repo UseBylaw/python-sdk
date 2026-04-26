@@ -39,7 +39,7 @@ class TestRequestClearance:
         request = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45})
         result = client.request_clearance(request)
 
-        assert result.approved is True
+        assert result.is_approved is True
         assert result.token is not None
         assert result.request_id == "req-001"
 
@@ -116,12 +116,12 @@ class TestRequestClearance:
     def test_processing_polls_until_approved(self, client: LedgixClient, approved_response: dict):
         processing_response = {
             "status": "processing",
-            "approved": False,
+            "decision_status": "denied",
             "token": None,
             "reason": "Queued",
             "request_id": "req-processing-001",
-            "confidence": 0.0,
-            "minimum_confidence_score": 0.8,
+            "confidence_bucket": "none",
+            "minimum_confidence_bucket": "medium",
         }
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(202, json=processing_response)
@@ -133,7 +133,7 @@ class TestRequestClearance:
         request = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45})
         result = client.request_clearance(request)
 
-        assert result.approved is True
+        assert result.is_approved is True
         assert result.request_id == "req-processing-001"
 
 
@@ -155,7 +155,7 @@ class TestAsyncRequestClearance:
         request = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45})
         result = await client.arequest_clearance(request)
 
-        assert result.approved is True
+        assert result.is_approved is True
         assert result.token is not None
 
     @respx.mock
@@ -309,7 +309,7 @@ class TestTokenVerification:
         request = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45})
         result = client_with_jwt.request_clearance(request)
 
-        assert result.approved is True
+        assert result.is_approved is True
 
 
 class TestLedgerProofVerification:
@@ -456,8 +456,10 @@ class TestLedgerProofVerification:
                             "reason": "approved",
                             "citations": [],
                             "evidence_chunks": [],
-                            "confidence": 0.88,
-                            "approved": True,
+                            "confidence_bucket": "high",
+            "decision_status": "approved",
+            "confidence": 0.85,
+            "approved": True,
                             "accepted_at": "2026-03-15T12:00:00Z",
                             "canonical_version": 1,
                             "event_hash": "a" * 64,
@@ -524,7 +526,9 @@ class TestLedgerProofVerification:
             "reason": "ok",
             "citations": [],
             "evidence_chunks": [],
-            "confidence": 0.91,
+            "confidence_bucket": "high",
+            "decision_status": "approved",
+            "confidence": 0.85,
             "approved": True,
             "accepted_at": "2026-03-15T12:00:00Z",
             "canonical_version": 1,
@@ -598,7 +602,9 @@ class TestLedgerProofVerification:
             "reason": "ok",
             "citations": [],
             "evidence_chunks": [],
-            "confidence": 0.91,
+            "confidence_bucket": "high",
+            "decision_status": "approved",
+            "confidence": 0.85,
             "approved": True,
             "accepted_at": "2026-03-15T12:00:00Z",
             "canonical_version": 1,
@@ -677,7 +683,9 @@ class TestLedgerProofVerification:
             "reason": "ok",
             "citations": [],
             "evidence_chunks": [],
-            "confidence": 0.91,
+            "confidence_bucket": "high",
+            "decision_status": "approved",
+            "confidence": 0.85,
             "approved": True,
             "accepted_at": "2026-03-15T12:00:00Z",
             "canonical_version": 1,
@@ -769,7 +777,9 @@ class TestLedgerProofVerification:
             "reason": "ok",
             "citations": [],
             "evidence_chunks": [],
-            "confidence": 0.88,
+            "confidence_bucket": "high",
+            "decision_status": "approved",
+            "confidence": 0.85,
             "approved": True,
             "accepted_at": "2026-03-15T13:00:00Z",
             "canonical_version": 1,
@@ -852,7 +862,7 @@ class TestRetry:
         request = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45})
         result = client.request_clearance(request)
 
-        assert result.approved is True
+        assert result.is_approved is True
         assert route.call_count == 3
         client.close()
 
@@ -872,7 +882,7 @@ class TestRetry:
         request = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45})
         result = client.request_clearance(request)
 
-        assert result.approved is True
+        assert result.is_approved is True
         client.close()
 
     @respx.mock
@@ -918,7 +928,7 @@ class TestRetry:
         request = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45})
         result = await client.arequest_clearance(request)
 
-        assert result.approved is True
+        assert result.is_approved is True
         await client.aclose()
 
 

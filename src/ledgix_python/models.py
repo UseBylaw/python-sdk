@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -70,21 +70,35 @@ class ClearanceRequest(BaseModel):
     )
 
 
-class ClearanceResponse(BaseModel):
-    """Response from the Vault's ``/request-clearance`` endpoint."""
+ConfidenceBucket = Literal["extra_high", "high", "medium", "low", "none"]
+DecisionStatus = Literal["approved", "denied", "approved_pending_review"]
 
-    status: str = Field(default="denied", description="Decision state: processing, approved, denied, or pending_review")
-    approved: bool = Field(..., description="Whether the tool call was approved")
+
+class ClearanceResponse(BaseModel):
+    """Response from the Vault's ``/request-clearance`` endpoint.
+
+    As of v1.0 the wire format is bucket-only. The legacy ``approved``,
+    ``confidence``, and ``minimum_confidence_score`` fields have been
+    removed; consumers read ``decision_status`` and ``confidence_bucket``
+    instead. See ``docs/MIGRATION_0.4.md`` for the migration guide.
+    """
+
+    status: str = Field(default="denied", description="Vault lifecycle: processing, approved, denied, or pending_review")
+    decision_status: DecisionStatus = Field(
+        default="denied",
+        description="Categorical decision: approved | denied | approved_pending_review",
+    )
     requires_manual_review: bool = Field(default=False, description="Whether the request is pending human review")
     token: str | None = Field(default=None, description="Signed A-JWT if approved, None if denied")
     reason: str = Field(default="", description="Human-readable explanation of the decision")
     request_id: str = Field(default="", description="Vault-assigned unique ID for this request")
-    confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="Judge confidence score")
-    minimum_confidence_score: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=1.0,
-        description="Client-configured minimum confidence score for auto approval",
+    confidence_bucket: ConfidenceBucket = Field(
+        default="none",
+        description="Categorical confidence: extra_high | high | medium | low | none",
+    )
+    minimum_confidence_bucket: ConfidenceBucket = Field(
+        default="high",
+        description="Client-configured minimum confidence bucket for auto approval",
     )
     policy_version_id: str | None = Field(
         default=None,
@@ -98,6 +112,18 @@ class ClearanceResponse(BaseModel):
         default=None,
         description="Machine-readable denial code, e.g. 'spend_cap_exceeded'",
     )
+
+    @property
+    def is_approved(self) -> bool:
+        """Convenience: True iff the policy permits the action.
+
+        Returns True for both ``approved`` and ``approved_pending_review``.
+        Use this in place of the legacy ``approved`` boolean. Note that
+        ``approved_pending_review`` does NOT mean the agent can proceed
+        immediately — it means the policy permits the action subject to
+        human review.
+        """
+        return self.decision_status in ("approved", "approved_pending_review")
 
 
 class PolicyRegistration(BaseModel):
@@ -147,8 +173,22 @@ class LedgerEntry(BaseModel):
     raw_citations: Any = Field(default_factory=lambda: _MISSING, exclude=True)
     evidence_chunks: list[dict[str, Any]] = Field(default_factory=list)
     raw_evidence_chunks: Any = Field(default_factory=lambda: _MISSING, exclude=True)
-    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
-    approved: bool
+    # Legacy float kept for canonical_version=1 hash verification of old rows.
+    # New rows under canonical_version=2 also carry confidence_bucket and
+    # decision_status as their canonical signal.
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="Legacy bucket midpoint; prefer confidence_bucket")
+    confidence_bucket: ConfidenceBucket | None = Field(
+        default=None,
+        description="Categorical confidence; populated for canonical_version>=2 events",
+    )
+    decision_status: DecisionStatus | None = Field(
+        default=None,
+        description="Categorical decision; populated for canonical_version>=2 events",
+    )
+    approved: bool = Field(
+        default=False,
+        description="Legacy boolean; derived for new rows. Prefer decision_status.",
+    )
     accepted_at: str = Field(validation_alias=AliasChoices("accepted_at", "decided_at"))
     canonical_version: int = 1
     event_hash: str

@@ -319,7 +319,7 @@ class LedgixClient:
     @staticmethod
     def _is_cacheable(clearance: ClearanceResponse) -> bool:
         return (
-            clearance.approved
+            clearance.decision_status == "approved"
             and clearance.status == "approved"
             and bool(clearance.policy_version_id)
             and clearance.token is not None
@@ -327,12 +327,12 @@ class LedgixClient:
 
     def _make_envelope(self, clearance: ClearanceResponse) -> dict[str, Any]:
         return {
-            "approved": clearance.approved,
+            "decision_status": clearance.decision_status,
             "reason": clearance.reason,
             "policy_version_id": clearance.policy_version_id or "",
             "policy_content_hash": clearance.policy_content_hash or "",
-            "confidence": clearance.confidence,
-            "minimum_confidence_score": clearance.minimum_confidence_score,
+            "confidence_bucket": clearance.confidence_bucket,
+            "minimum_confidence_bucket": clearance.minimum_confidence_bucket,
             "original_request_id": clearance.request_id,
         }
 
@@ -347,7 +347,7 @@ class LedgixClient:
             "policy_version_id": envelope["policy_version_id"],
             "policy_content_hash": envelope["policy_content_hash"],
             "original_request_id": envelope["original_request_id"],
-            "confidence": envelope["confidence"],
+            "confidence_bucket": envelope["confidence_bucket"],
             "reason": envelope["reason"],
             "human_principal": request.human_principal or self.config.principal_id,
             "destination_uri": request.destination_uri or "",
@@ -371,13 +371,13 @@ class LedgixClient:
         data = response.json()
         return ClearanceResponse(
             status="approved",
-            approved=True,
+            decision_status="approved",
             requires_manual_review=False,
             token=data.get("token"),
             reason=data.get("reason", envelope["reason"]),
             request_id=data.get("request_id", ""),
-            confidence=envelope["confidence"],
-            minimum_confidence_score=envelope["minimum_confidence_score"],
+            confidence_bucket=envelope["confidence_bucket"],
+            minimum_confidence_bucket=envelope.get("minimum_confidence_bucket", "high"),
             policy_version_id=envelope["policy_version_id"],
             policy_content_hash=envelope["policy_content_hash"],
         )
@@ -393,7 +393,7 @@ class LedgixClient:
             "policy_version_id": envelope["policy_version_id"],
             "policy_content_hash": envelope["policy_content_hash"],
             "original_request_id": envelope["original_request_id"],
-            "confidence": envelope["confidence"],
+            "confidence_bucket": envelope["confidence_bucket"],
             "reason": envelope["reason"],
             "human_principal": request.human_principal or self.config.principal_id,
             "destination_uri": request.destination_uri or "",
@@ -417,13 +417,13 @@ class LedgixClient:
         data = response.json()
         return ClearanceResponse(
             status="approved",
-            approved=True,
+            decision_status="approved",
             requires_manual_review=False,
             token=data.get("token"),
             reason=data.get("reason", envelope["reason"]),
             request_id=data.get("request_id", ""),
-            confidence=envelope["confidence"],
-            minimum_confidence_score=envelope["minimum_confidence_score"],
+            confidence_bucket=envelope["confidence_bucket"],
+            minimum_confidence_bucket=envelope.get("minimum_confidence_bucket", "high"),
             policy_version_id=envelope["policy_version_id"],
             policy_content_hash=envelope["policy_content_hash"],
         )
@@ -473,7 +473,7 @@ class LedgixClient:
             raise ReviewPendingError(result)
         clearance = result
 
-        if not clearance.approved:
+        if not clearance.is_approved:
             raise ClearanceDeniedError(
                 reason=clearance.reason,
                 request_id=clearance.request_id,
@@ -532,7 +532,7 @@ class LedgixClient:
             raise ReviewPendingError(result)
         clearance = result
 
-        if not clearance.approved:
+        if not clearance.is_approved:
             raise ClearanceDeniedError(
                 reason=clearance.reason,
                 request_id=clearance.request_id,

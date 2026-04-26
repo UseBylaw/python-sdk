@@ -74,7 +74,7 @@ class PendingApproval:
             response.raise_for_status()
             clearance = CR.model_validate(response.json())
             if clearance.status not in {"processing", "pending_review"}:
-                if not clearance.approved:
+                if not clearance.is_approved:
                     raise ClearanceDeniedError(
                         reason=clearance.reason,
                         request_id=clearance.request_id,
@@ -101,7 +101,7 @@ class PendingApproval:
             response.raise_for_status()
             clearance = CR.model_validate(response.json())
             if clearance.status not in {"processing", "pending_review"}:
-                if not clearance.approved:
+                if not clearance.is_approved:
                     raise ClearanceDeniedError(
                         reason=clearance.reason,
                         request_id=clearance.request_id,

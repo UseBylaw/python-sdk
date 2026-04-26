@@ -51,7 +51,7 @@ def test_429_with_retry_after_sleeps_for_header_value(monkeypatch):
 
     approved = {
         "status": "approved",
-        "approved": True,
+        "decision_status": "approved",
         "token": "test-token",
         "reason": "ok",
         "request_id": "req-001",
@@ -68,7 +68,7 @@ def test_429_with_retry_after_sleeps_for_header_value(monkeypatch):
         result = client.request_clearance(
             ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 25})
         )
-        assert result.approved is True
+        assert result.is_approved is True
         # Exactly one sleep, of ~2 seconds (the Retry-After value).
         assert sleeps, "SDK should have slept after 429"
         assert any(abs(s - 2.0) < 0.01 for s in sleeps), f"expected 2s sleep, got {sleeps}"
@@ -85,7 +85,7 @@ def test_429_without_header_falls_back_to_jitter(monkeypatch):
 
     approved = {
         "status": "approved",
-        "approved": True,
+        "decision_status": "approved",
         "token": "test-token",
         "reason": "ok",
         "request_id": "req-fallback",
@@ -102,7 +102,7 @@ def test_429_without_header_falls_back_to_jitter(monkeypatch):
         result = client.request_clearance(
             ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 25})
         )
-        assert result.approved is True
+        assert result.is_approved is True
         # SDK fell through to _backoff_delay (0s base in test config), so the
         # sleep is recorded as 0 — the important property is that we still
         # retried and didn't pop the request as a hard error.
@@ -121,7 +121,7 @@ def test_429_does_not_consume_retry_budget(monkeypatch):
 
     approved = {
         "status": "approved",
-        "approved": True,
+        "decision_status": "approved",
         "token": "test-token",
         "reason": "ok",
         "request_id": "req-budget",
@@ -140,7 +140,7 @@ def test_429_does_not_consume_retry_budget(monkeypatch):
         result = client.request_clearance(
             ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 25})
         )
-        assert result.approved is True
+        assert result.is_approved is True
         assert result.request_id == "req-budget"
     finally:
         client.close()
@@ -181,7 +181,7 @@ def test_retry_after_capped_at_safety_net(monkeypatch):
 
     approved = {
         "status": "approved",
-        "approved": True,
+        "decision_status": "approved",
         "token": "test-token",
         "reason": "ok",
         "request_id": "req-cap",
@@ -214,7 +214,7 @@ def test_invalid_retry_after_falls_back_gracefully(monkeypatch):
 
     approved = {
         "status": "approved",
-        "approved": True,
+        "decision_status": "approved",
         "token": "test-token",
         "reason": "ok",
         "request_id": "req-junk",
@@ -231,7 +231,7 @@ def test_invalid_retry_after_falls_back_gracefully(monkeypatch):
         result = client.request_clearance(
             ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 25})
         )
-        assert result.approved is True
+        assert result.is_approved is True
         assert sleeps  # still slept, just via the jitter fallback
     finally:
         client.close()
@@ -254,7 +254,7 @@ async def test_async_429_honors_retry_after(monkeypatch):
 
     approved = {
         "status": "approved",
-        "approved": True,
+        "decision_status": "approved",
         "token": "test-token",
         "reason": "ok",
         "request_id": "req-async",
@@ -271,7 +271,7 @@ async def test_async_429_honors_retry_after(monkeypatch):
         result = await client.arequest_clearance(
             ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 25})
         )
-        assert result.approved is True
+        assert result.is_approved is True
         assert any(abs(s - 3.0) < 0.01 for s in sleeps), f"expected 3s sleep, got {sleeps}"
     finally:
         await client.aclose()

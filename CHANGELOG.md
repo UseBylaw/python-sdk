@@ -5,6 +5,56 @@ All notable changes to `ledgix-python` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0]
+
+### Breaking changes — categorical confidence buckets
+
+This release replaces the legacy decimal `confidence: float` field with five
+categorical buckets (`extra_high | high | medium | low | none`), and splits
+the overloaded `approved=True + confidence=0.00` "needs human review"
+sentinel into an explicit `decision_status` field
+(`approved | denied | approved_pending_review`). See
+[`docs/MIGRATION_0.4.md`](docs/MIGRATION_0.4.md) for the migration guide.
+
+> Note: the wire format change is breaking, but the SemVer bump is 0.3.1 →
+> 0.4.0 (still in 0.x.0). The 0.x line is pre-1.0 and minor bumps are
+> allowed to carry breaking changes per SemVer §4. Customers pinning
+> `^0.3` will NOT auto-upgrade; they must explicitly bump to `^0.4`
+> after reading the migration guide.
+
+#### `ClearanceResponse` — fields removed
+- `approved: bool`
+- `confidence: float`
+- `minimum_confidence_score: float`
+
+#### `ClearanceResponse` — fields added
+- `decision_status: Literal["approved", "denied", "approved_pending_review"]`
+- `confidence_bucket: Literal["extra_high", "high", "medium", "low", "none"]`
+- `minimum_confidence_bucket: Literal[...]` (same five values)
+- `is_approved` property — convenience boolean for the common
+  "may the agent proceed?" check, returns `True` for both `approved` and
+  `approved_pending_review`.
+
+#### `LedgerEntry`
+- `confidence_bucket` and `decision_status` added (populated for
+  canonical_version=2 events).
+- Legacy `confidence: float` and `approved: bool` retained on the model so
+  canonical_version=1 hash verification of historical rows still works.
+
+#### Why this changed
+The previous design overloaded `confidence=0.00` to mean both "extreme low
+confidence" (deny path) and "needs human review" (gated approval). Customer
+code doing `if response.confidence < threshold: reject` would accidentally
+reject the very review-pending decisions the platform was trying to surface.
+The bucket migration retires the cents-level decimal precision the model
+couldn't reliably produce and gives review-pending its own dedicated state.
+
+#### Migration in one line
+- Old: `if response.approved and response.confidence >= 0.8: ...`
+- New: `if response.decision_status == "approved": ...`
+  (or `if response.is_approved: ...` if you also want to treat
+  `approved_pending_review` as "may proceed eventually").
+
 ## [0.3.1]
 
 ### Added

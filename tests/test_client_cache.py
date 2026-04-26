@@ -53,12 +53,12 @@ def _cache_config(**overrides) -> VaultConfig:
 def _approved_body(token: str, policy_version_id: str = "pvid-001") -> dict:
     return {
         "status": "approved",
-        "approved": True,
+        "decision_status": "approved",
         "token": token,
         "reason": "Policy passed",
         "request_id": "req-original-001",
-        "confidence": 0.95,
-        "minimum_confidence_score": 0.5,
+        "confidence_bucket": "extra_high",
+        "minimum_confidence_bucket": "medium",
         "policy_version_id": policy_version_id,
         "policy_content_hash": "sha256:abc",
     }
@@ -68,7 +68,7 @@ def _mint_body(token: str, request_id: str = "req-mint-001") -> dict:
     return {
         "request_id": request_id,
         "token": token,
-        "approved": True,
+        "decision_status": "approved",
         "reason": "Policy passed",
     }
 
@@ -143,13 +143,13 @@ class TestSyncCache:
 
             # First call — cache miss → calls /request-clearance
             r1 = client.request_clearance(req)
-            assert r1.approved
+            assert r1.is_approved
             assert clearance_route.call_count == 1
             assert mint_route.call_count == 0
 
             # Second call — cache hit → calls /mint-token, NOT /request-clearance
             r2 = client.request_clearance(req)
-            assert r2.approved
+            assert r2.is_approved
             assert clearance_route.call_count == 1
             assert mint_route.call_count == 1
 
@@ -161,12 +161,12 @@ class TestSyncCache:
 
         denied = {
             "status": "denied",
-            "approved": False,
+            "decision_status": "denied",
             "token": None,
             "reason": "Denied",
             "request_id": "req-deny-001",
-            "confidence": 0.9,
-            "minimum_confidence_score": 0.5,
+            "confidence_bucket": "high",
+            "minimum_confidence_bucket": "medium",
         }
         req = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 9999})
 
@@ -187,12 +187,12 @@ class TestSyncCache:
 
         no_pvid = {
             "status": "approved",
-            "approved": True,
+            "decision_status": "approved",
             "token": token,
             "reason": "ok",
             "request_id": "req-001",
-            "confidence": 0.9,
-            "minimum_confidence_score": 0.5,
+            "confidence_bucket": "high",
+            "minimum_confidence_bucket": "medium",
             "policy_version_id": None,
         }
         req = ClearanceRequest(tool_name="t", tool_args={})
@@ -314,12 +314,12 @@ class TestAsyncCache:
             req = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 50})
 
             r1 = await client.arequest_clearance(req)
-            assert r1.approved
+            assert r1.is_approved
             assert clearance_route.call_count == 1
             assert mint_route.call_count == 0
 
             r2 = await client.arequest_clearance(req)
-            assert r2.approved
+            assert r2.is_approved
             assert clearance_route.call_count == 1
             assert mint_route.call_count == 1
 
