@@ -1,0 +1,42 @@
+# Ship Safe ignore rules for python-sdk
+# Published as ledgix-python on PyPI. Agent-agnostic SDK shim.
+
+# --- Test fixtures ---
+
+# Test files use sk_test_abcdefghij1234 as a dummy API key.
+Generic API Key Assignment
+
+# Test assertions use == for values, not secrets.
+Timing Attack: String Comparison
+
+# --- CLI (ledgix init / status / teardown) ---
+
+# CLI commands invoke docker-compose and subprocess.run for local dev
+# orchestration. These are user-invoked commands, not LLM-driven actions.
+AGENT_OUTPUT_TO_ACTION
+
+# Recursive invocation flag is a Pydantic data field, not agent behavior.
+AGENT_RECURSIVE_INVOCATION
+
+# --- Docker-compose defaults ---
+
+# cli.py embeds docker-compose templates with localhost Postgres URLs
+# and dev-only default passwords for local development.
+Database URL with embedded credentials
+SSRF_INTERNAL_IP
+Password in URL
+
+# --- Dependencies ---
+
+# httpx==0.27.2 is a standard PyPI version specifier, not a git/URL dep.
+Git/URL Python Dependency
+GIT_PYTHON_DEP
+
+# --- JWT ---
+
+# jwt.decode with a key argument verifies the signature. The scanner
+# flags the call as "verification disabled" but it is not.
+JWT_VERIFY_DISABLED
+
+# --- General ---
+MCP_SHADOW_CONFIG
