@@ -12,6 +12,7 @@ from ledgix_python.counterparty import extract
 
 
 def test_extract_stripe_truncates_key() -> None:
+    # ship-safe-ignore Generic API Key Assignment
     out = extract("stripe.create_charge", {"api_key": "sk_test_abcdefghij1234", "amount": 500})
     assert out["destination_provider"] == "stripe"
     assert out["destination_uri"] == "https://api.stripe.com"
@@ -42,6 +43,7 @@ def test_enrich_request_fills_destination_when_missing() -> None:
     client = LedgixClient(VaultConfig(vault_url="http://localhost:8000"))
     req = ClearanceRequest(
         tool_name="stripe_charge",
+        # ship-safe-ignore Generic API Key Assignment
         tool_args={"api_key": "sk_test_abcdefghij1234", "amount": 100},
     )
     enriched = client._enrich_request(req)
@@ -54,6 +56,7 @@ def test_enrich_request_caller_destination_wins_over_inference() -> None:
     client = LedgixClient(VaultConfig(vault_url="http://localhost:8000"))
     req = ClearanceRequest(
         tool_name="stripe_charge",
+        # ship-safe-ignore Generic API Key Assignment
         tool_args={"api_key": "sk_test_abcdefghij1234"},
         destination_provider="custom-stripe-shim",
         destination_account_ref="acct_explicit",

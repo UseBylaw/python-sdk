@@ -95,7 +95,7 @@ class TestClearanceResponse:
             request_id="req-1",
         )
         assert resp.is_approved is True
-        assert resp.token == "eyJ..."
+        assert resp.token == "eyJ..."  # ship-safe-ignore Timing Attack: String Comparison — test assertion, not auth check
 
     def test_denied(self):
         resp = ClearanceResponse(

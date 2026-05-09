@@ -1,4 +1,4 @@
-httpx>=0.25.0
+httpx>=0.25.0  # ship-safe-ignore Git/URL Python Dependency — standard PyPI version specifier, not a git URL
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
 PyJWT[crypto]>=2.8.0

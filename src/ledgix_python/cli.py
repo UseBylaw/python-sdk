@@ -31,10 +31,10 @@ COMPOSE_TEMPLATE = textwrap.dedent("""\
         container_name: ledgix_dev_postgres
         restart: unless-stopped
         ports:
-          - "127.0.0.1:{postgres_port}:5432"
+          - "127.0.0.1:{postgres_port}:5432"  # ship-safe-ignore SSRF_INTERNAL_IP — docker-compose template localhost binding
         environment:
           POSTGRES_USER: ledgix
-          POSTGRES_PASSWORD: ledgix-dev
+          POSTGRES_PASSWORD: ledgix-dev  # ship-safe-ignore Password in URL — dev-only docker-compose default
           POSTGRES_DB: ledgix_dev
         volumes:
           - ledgix_pgdata:/var/lib/postgresql/data
@@ -49,7 +49,7 @@ COMPOSE_TEMPLATE = textwrap.dedent("""\
         container_name: ledgix_dev_vault
         restart: unless-stopped
         ports:
-          - "127.0.0.1:{vault_port}:8000"
+          - "127.0.0.1:{vault_port}:8000"  # ship-safe-ignore SSRF_INTERNAL_IP — docker-compose template localhost binding
         environment:
           VAULT_PORT: "8000"
           VAULT_JUDGE_URL: http://ledgix_dev_judge:8000
@@ -60,7 +60,7 @@ COMPOSE_TEMPLATE = textwrap.dedent("""\
           VAULT_ALLOW_INSECURE_DEV_MODE: "true"
           VAULT_DEV_TENANT_ID: {tenant_id}
           VAULT_DEV_API_KEY: {api_key}
-          VAULT_DEV_DB_URL: postgres://ledgix:ledgix-dev@ledgix_dev_postgres:5432/ledgix_dev?sslmode=disable
+          VAULT_DEV_DB_URL: postgres://ledgix:ledgix-dev@ledgix_dev_postgres:5432/ledgix_dev?sslmode=disable  # ship-safe-ignore Database URL with embedded credentials — dev-only docker-compose default
           VAULT_RATE_LIMIT_RPS: "0"
         depends_on:
           postgres:
@@ -73,7 +73,7 @@ COMPOSE_TEMPLATE = textwrap.dedent("""\
         container_name: ledgix_dev_judge
         restart: unless-stopped
         environment:
-          DATABASE_URL: postgres://ledgix:ledgix-dev@ledgix_dev_postgres:5432/ledgix_dev?sslmode=disable
+          DATABASE_URL: postgres://ledgix:ledgix-dev@ledgix_dev_postgres:5432/ledgix_dev?sslmode=disable  # ship-safe-ignore Database URL with embedded credentials — dev-only docker-compose default
           EMBEDDING_MODEL: bedrock/amazon.titan-embed-text-v2:0
           EVAL_MODEL: bedrock/amazon.nova-pro-v1:0
           AWS_REGION: us-east-1
@@ -120,12 +120,14 @@ def _docker_available() -> bool:
 
 
 def _compose_cmd() -> list[str]:
+    # ship-safe-ignore Agent: LLM Output Directly Triggers Actions — static docker CLI probe, not LLM-driven
     result = subprocess.run(
         ["docker", "compose", "version"],
         capture_output=True, text=True,
     )
     if result.returncode == 0:
         return ["docker", "compose"]
+    # ship-safe-ignore Agent: LLM Output Directly Triggers Actions — static docker CLI probe, not LLM-driven
     result2 = subprocess.run(
         ["docker-compose", "version"],
         capture_output=True, text=True,
@@ -227,6 +229,7 @@ def init(vault_port: int, api_key: str, tenant_id: str, skip_health_check: bool)
 
     click.echo("\nStarting services...")
     base = _compose_base()
+    # ship-safe-ignore Agent: LLM Output Directly Triggers Actions — user-invoked CLI command, not LLM-driven
     result = subprocess.run([*base, "up", "-d", "--pull", "always"], capture_output=True, text=True)
     if result.returncode != 0:
         click.echo(f"Error starting services:\n{result.stderr}", err=True)
@@ -289,6 +292,7 @@ def status():
         return
 
     base = _compose_base()
+    # ship-safe-ignore Agent: LLM Output Directly Triggers Actions — user-invoked CLI command, not LLM-driven
     result = subprocess.run([*base, "ps", "--format", "json"], capture_output=True, text=True)
     if result.returncode != 0:
         click.echo("Could not query container status.")
@@ -352,6 +356,7 @@ def teardown(volumes: bool):
     if volumes:
         cmd.append("-v")
 
+    # ship-safe-ignore Agent: LLM Output Directly Triggers Actions — user-invoked CLI command, not LLM-driven
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         click.echo(f"Error during teardown:\n{result.stderr}", err=True)

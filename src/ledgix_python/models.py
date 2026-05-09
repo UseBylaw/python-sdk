@@ -18,6 +18,7 @@ class ClearanceRequest(BaseModel):
         default_factory=dict,
         description="Arguments the agent will pass to the tool",
     )
+    # ship-safe-ignore Agent: Recursive Self-Invocation — this is a data field, not recursive invocation
     agent_id: str = Field(default="default-agent", description="Identifier for the calling agent")
     session_id: str = Field(default="", description="Session grouping identifier")
     context: dict[str, Any] = Field(
