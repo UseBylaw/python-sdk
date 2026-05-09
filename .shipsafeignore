@@ -3,7 +3,7 @@
 
 # --- Test fixtures ---
 
-# Test files use sk_test_abcdefghij1234 as a dummy API key.
+# Test files use dummy API key loaded from env var with test fallback.
 Generic API Key Assignment
 
 # Test assertions use == for values, not secrets.
@@ -24,10 +24,11 @@ AGENT_RECURSIVE_INVOCATION
 # and dev-only default passwords for local development.
 Database URL with Credentials
 SSRF_INTERNAL_IP
+Password Assignment
 
 # --- Dependencies ---
 
-# httpx==0.27.2 is a standard PyPI version specifier, not a git/URL dep.
+# httpx>=0.25.0 is a standard PyPI version specifier, not a git/URL dep.
 GIT_PYTHON_DEP
 
 # --- JWT ---

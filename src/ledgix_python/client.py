@@ -956,7 +956,6 @@ class LedgixClient:
 
             public_key = jwt.algorithms.OKPAlgorithm.from_jwk(json.dumps(key_data))
 
-            # ship-safe-ignore JWT_VERIFY_DISABLED — jwt.decode verifies signature when key is provided
             decoded = jwt.decode(
                 token,
                 public_key,

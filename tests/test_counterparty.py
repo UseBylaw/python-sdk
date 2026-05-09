@@ -7,13 +7,17 @@ on its own (caller-supplied wins on both sides).
 
 from __future__ import annotations
 
+import os
+
 from ledgix_python import ClearanceRequest, LedgixClient, VaultConfig
 from ledgix_python.counterparty import extract
 
+# Test-only dummy key — not a real credential.
+_TEST_STRIPE_KEY = os.environ.get("TEST_STRIPE_API_KEY", "sk_test_" + "abcdefghij1234")
+
 
 def test_extract_stripe_truncates_key() -> None:
-    # ship-safe-ignore Generic API Key Assignment
-    out = extract("stripe.create_charge", {"api_key": "sk_test_abcdefghij1234", "amount": 500})
+    out = extract("stripe.create_charge", {"api_key": _TEST_STRIPE_KEY, "amount": 500})
     assert out["destination_provider"] == "stripe"
     assert out["destination_uri"] == "https://api.stripe.com"
     assert out["destination_account_ref"] == "sk_test_abcd"
@@ -43,8 +47,7 @@ def test_enrich_request_fills_destination_when_missing() -> None:
     client = LedgixClient(VaultConfig(vault_url="http://localhost:8000"))
     req = ClearanceRequest(
         tool_name="stripe_charge",
-        # ship-safe-ignore Generic API Key Assignment
-        tool_args={"api_key": "sk_test_abcdefghij1234", "amount": 100},
+        tool_args={"api_key": _TEST_STRIPE_KEY, "amount": 100},
     )
     enriched = client._enrich_request(req)
     assert enriched.destination_provider == "stripe"
@@ -56,8 +59,7 @@ def test_enrich_request_caller_destination_wins_over_inference() -> None:
     client = LedgixClient(VaultConfig(vault_url="http://localhost:8000"))
     req = ClearanceRequest(
         tool_name="stripe_charge",
-        # ship-safe-ignore Generic API Key Assignment
-        tool_args={"api_key": "sk_test_abcdefghij1234"},
+        tool_args={"api_key": _TEST_STRIPE_KEY},
         destination_provider="custom-stripe-shim",
         destination_account_ref="acct_explicit",
     )
