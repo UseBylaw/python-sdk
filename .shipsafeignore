@@ -7,7 +7,7 @@
 Generic API Key Assignment
 
 # Test assertions use == for values, not secrets.
-Timing Attack: String Comparison
+TIMING_ATTACK_COMPARISON
 
 # --- CLI (ledgix init / status / teardown) ---
 
@@ -22,14 +22,12 @@ AGENT_RECURSIVE_INVOCATION
 
 # cli.py embeds docker-compose templates with localhost Postgres URLs
 # and dev-only default passwords for local development.
-Database URL with embedded credentials
+Database URL with Credentials
 SSRF_INTERNAL_IP
-Password in URL
 
 # --- Dependencies ---
 
 # httpx==0.27.2 is a standard PyPI version specifier, not a git/URL dep.
-Git/URL Python Dependency
 GIT_PYTHON_DEP
 
 # --- JWT ---
@@ -37,6 +35,10 @@ GIT_PYTHON_DEP
 # jwt.decode with a key argument verifies the signature. The scanner
 # flags the call as "verification disabled" but it is not.
 JWT_VERIFY_DISABLED
+
+# --- Git history ---
+# No real secrets were ever committed; placeholder values only.
+GIT_HISTORY_SECRET
 
 # --- General ---
 MCP_SHADOW_CONFIG
