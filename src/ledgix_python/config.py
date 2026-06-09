@@ -44,6 +44,20 @@ class VaultConfig(BaseSettings):
     session_id: str = ""
     """Optional session identifier for grouping related clearance requests."""
 
+    model_provider: str | None = None
+    """Optional model-provider hint for the OSFI agent registry (e.g. ``"anthropic"``,
+    ``"bedrock"``, ``"openai"``). Forwarded in the clearance request ``context`` so
+    the Vault can auto-populate the agent inventory. Env: ``LEDGIX_MODEL_PROVIDER``."""
+
+    model_id: str | None = None
+    """Optional model identifier hint (e.g. ``"claude-opus-4"``). Forwarded in the
+    clearance request ``context``. Env: ``LEDGIX_MODEL_ID``."""
+
+    environment: str | None = None
+    """Optional deployment-environment hint (``"production"`` / ``"staging"``) for the
+    OSFI agent registry. Forwarded in the clearance request ``context``.
+    Env: ``LEDGIX_ENVIRONMENT``."""
+
     review_poll_interval: float = 2.0
     """Polling interval in seconds while waiting for manual review."""
 

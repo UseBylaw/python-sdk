@@ -269,6 +269,20 @@ class LedgixClient:
                 updates["destination_provider"] = inferred["destination_provider"]
             if request.destination_account_ref is None and "destination_account_ref" in inferred:
                 updates["destination_account_ref"] = inferred["destination_account_ref"]
+        # OSFI agent-registry hints — forwarded in ``context`` (snake_case so they
+        # map straight onto the Vault's RequestContext). Caller-supplied context
+        # values always win.
+        hints = {
+            "model_provider": self.config.model_provider,
+            "model_id": self.config.model_id,
+            "environment": self.config.environment,
+        }
+        present = {key: value for key, value in hints.items() if value}
+        if present:
+            merged = dict(request.context or {})
+            for key, value in present.items():
+                merged.setdefault(key, value)
+            updates["context"] = merged
         return request.model_copy(update=updates) if updates else request
 
     def create_delegated_client(self, parent_jti: str) -> "LedgixClient":
