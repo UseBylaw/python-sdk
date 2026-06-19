@@ -1,11 +1,11 @@
-# Ledgix ALCV — Model Tests
+# Bylaw ALCV — Model Tests
 # Tests for Pydantic model serialization and validation
 
 from __future__ import annotations
 
 import pytest
 
-from ledgix_python.models import (
+from bylaw_python.models import (
     ClearanceRequest,
     ClearanceResponse,
     PolicyRegistration,

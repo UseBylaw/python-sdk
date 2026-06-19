@@ -1,4 +1,4 @@
-# Ledgix ALCV — Configuration
+# Bylaw ALCV — Configuration
 # Environment-driven configuration via pydantic-settings
 
 from __future__ import annotations
@@ -9,12 +9,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class VaultConfig(BaseSettings):
     """Configuration for connecting to the ALCV Vault.
 
-    Values are loaded from environment variables prefixed with ``LEDGIX_``,
-    e.g. ``LEDGIX_VAULT_URL``, or can be passed directly to the constructor.
+    Values are loaded from environment variables prefixed with ``BYLAW_``,
+    e.g. ``BYLAW_VAULT_URL``, or can be passed directly to the constructor.
     """
 
     model_config = SettingsConfigDict(
-        env_prefix="LEDGIX_",
+        env_prefix="BYLAW_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
@@ -53,8 +53,8 @@ class VaultConfig(BaseSettings):
     review_mode: str = "block"
     """How to handle pending manual reviews. ``"block"`` (default): poll until
     a decision arrives or timeout expires. ``"detach"``: return a
-    :class:`~ledgix_python.PendingApproval` immediately so the caller can
-    resume later via :meth:`~ledgix_python.PendingApproval.wait_async`."""
+    :class:`~bylaw_python.PendingApproval` immediately so the caller can
+    resume later via :meth:`~bylaw_python.PendingApproval.wait_async`."""
 
     max_retries: int = 3
     """Number of retry attempts for transient failures (connection errors, 5xx responses)."""
@@ -77,19 +77,19 @@ class VaultConfig(BaseSettings):
     principal_id: str | None = None
     """Advisory OIDC ``sub`` of the human on whose behalf the agent acts.
     Sent as ``human_principal`` in every clearance request.  Can be overridden
-    per-call via ``on_behalf_of`` argument.  Env: ``LEDGIX_PRINCIPAL_ID``."""
+    per-call via ``on_behalf_of`` argument.  Env: ``BYLAW_PRINCIPAL_ID``."""
 
     jwks_ttl_seconds: int = 300
     """How long (seconds) the cached JWKS is considered fresh before a key-miss
     triggers a refetch. Default 5 minutes matches the Vault's rotation cadence.
-    Env: ``LEDGIX_JWKS_TTL_SECONDS``."""
+    Env: ``BYLAW_JWKS_TTL_SECONDS``."""
 
     replay_cache_size: int = 10_000
     """Maximum number of consumed A-JWT jtis held in the in-process replay
     cache. When the limit is reached the oldest entries are evicted (LRU-TTL).
-    Env: ``LEDGIX_REPLAY_CACHE_SIZE``."""
+    Env: ``BYLAW_REPLAY_CACHE_SIZE``."""
 
     max_token_lifetime_seconds: float = 330.0
     """TTL for entries in the replay cache (seconds). Should be at least
     ``VAULT_JWT_TTL + 30`` to cover clock skew. Default 330 = 5 min TTL + 30s.
-    Env: ``LEDGIX_MAX_TOKEN_LIFETIME_SECONDS``."""
+    Env: ``BYLAW_MAX_TOKEN_LIFETIME_SECONDS``."""

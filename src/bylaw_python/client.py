@@ -1,4 +1,4 @@
-# Ledgix ALCV — Client
+# Bylaw ALCV — Client
 # Sync + async HTTP client for Vault communication and A-JWT verification
 
 from __future__ import annotations
@@ -75,17 +75,17 @@ from .models import (
 )
 
 
-class LedgixClient:
+class BylawClient:
     """Sync + async client for the ALCV Vault.
 
     Usage (sync)::
 
-        client = LedgixClient()
+        client = BylawClient()
         resp = client.request_clearance(ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45}))
 
     Usage (async)::
 
-        client = LedgixClient()
+        client = BylawClient()
         resp = await client.arequest_clearance(ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45}))
     """
 
@@ -271,13 +271,13 @@ class LedgixClient:
                 updates["destination_account_ref"] = inferred["destination_account_ref"]
         return request.model_copy(update=updates) if updates else request
 
-    def create_delegated_client(self, parent_jti: str) -> "LedgixClient":
+    def create_delegated_client(self, parent_jti: str) -> "BylawClient":
         """Return a new client that auto-injects *parent_jti* on every clearance request.
 
         The returned client shares the same ``VaultConfig`` but does not share
         HTTP connections or the decision cache, so it is safe to use concurrently.
         """
-        return LedgixClient(config=self.config, _parent_jti=parent_jti)
+        return BylawClient(config=self.config, _parent_jti=parent_jti)
 
     def _build_cache_key(self, request: ClearanceRequest) -> str:
         """Return a stable hex cache key for a clearance request, or '' if not cacheable."""
@@ -1582,13 +1582,13 @@ class LedgixClient:
         if self._async_client and not self._async_client.is_closed:
             await self._async_client.aclose()
 
-    def __enter__(self) -> LedgixClient:
+    def __enter__(self) -> BylawClient:
         return self
 
     def __exit__(self, *args: Any) -> None:
         self.close()
 
-    async def __aenter__(self) -> LedgixClient:
+    async def __aenter__(self) -> BylawClient:
         return self
 
     async def __aexit__(self, *args: Any) -> None:

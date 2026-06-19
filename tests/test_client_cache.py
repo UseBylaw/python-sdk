@@ -12,9 +12,9 @@ import respx
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from httpx import Response
 
-from ledgix_python import LedgixClient, VaultConfig
-from ledgix_python.exceptions import ClearanceDeniedError, VaultConnectionError
-from ledgix_python.models import ClearanceRequest, ClearanceResponse
+from bylaw_python import BylawClient, VaultConfig
+from bylaw_python.exceptions import ClearanceDeniedError, VaultConnectionError
+from bylaw_python.models import ClearanceRequest, ClearanceResponse
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +80,7 @@ def _mint_body(token: str, request_id: str = "req-mint-001") -> dict:
 class TestBuildCacheKey:
     def test_key_stability(self):
         cfg = _cache_config()
-        client = LedgixClient(config=cfg)
+        client = BylawClient(config=cfg)
         req = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 50})
         key1 = client._build_cache_key(req)
         key2 = client._build_cache_key(req)
@@ -89,7 +89,7 @@ class TestBuildCacheKey:
 
     def test_different_tool_names_produce_different_keys(self):
         cfg = _cache_config()
-        client = LedgixClient(config=cfg)
+        client = BylawClient(config=cfg)
         req1 = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 50})
         req2 = ClearanceRequest(tool_name="send_email", tool_args={"amount": 50})
         assert client._build_cache_key(req1) != client._build_cache_key(req2)
@@ -97,7 +97,7 @@ class TestBuildCacheKey:
 
     def test_dict_key_order_invariant(self):
         cfg = _cache_config()
-        client = LedgixClient(config=cfg)
+        client = BylawClient(config=cfg)
         req1 = ClearanceRequest(tool_name="t", tool_args={"b": 2, "a": 1})
         req2 = ClearanceRequest(tool_name="t", tool_args={"a": 1, "b": 2})
         assert client._build_cache_key(req1) == client._build_cache_key(req2)
@@ -105,7 +105,7 @@ class TestBuildCacheKey:
 
     def test_different_agent_id_produces_different_keys(self):
         cfg = _cache_config()
-        client = LedgixClient(config=cfg)
+        client = BylawClient(config=cfg)
         req1 = ClearanceRequest(tool_name="t", tool_args={}, agent_id="agent-A")
         req2 = ClearanceRequest(tool_name="t", tool_args={}, agent_id="agent-B")
         assert client._build_cache_key(req1) != client._build_cache_key(req2)
@@ -113,7 +113,7 @@ class TestBuildCacheKey:
 
     def test_large_tool_args_returns_empty_key(self):
         cfg = _cache_config()
-        client = LedgixClient(config=cfg)
+        client = BylawClient(config=cfg)
         big_args = {"data": "x" * 70_000}
         req = ClearanceRequest(tool_name="t", tool_args=big_args)
         assert client._build_cache_key(req) == ""
@@ -129,7 +129,7 @@ class TestSyncCache:
         token = _make_jwt(ed25519_private_key)
         mint_token = _make_jwt(ed25519_private_key, "req-mint-001")
         cfg = _cache_config()
-        client = LedgixClient(config=cfg)
+        client = BylawClient(config=cfg)
 
         with respx.mock(base_url="https://vault.test") as mock:
             clearance_route = mock.post("/request-clearance").mock(
@@ -157,7 +157,7 @@ class TestSyncCache:
 
     def test_denied_response_not_cached(self, ed25519_private_key):
         cfg = _cache_config()
-        client = LedgixClient(config=cfg)
+        client = BylawClient(config=cfg)
 
         denied = {
             "status": "denied",
@@ -183,7 +183,7 @@ class TestSyncCache:
     def test_response_without_policy_version_id_not_cached(self, ed25519_private_key):
         token = _make_jwt(ed25519_private_key)
         cfg = _cache_config()
-        client = LedgixClient(config=cfg)
+        client = BylawClient(config=cfg)
 
         no_pvid = {
             "status": "approved",
@@ -208,7 +208,7 @@ class TestSyncCache:
     def test_clear_cache(self, ed25519_private_key):
         token = _make_jwt(ed25519_private_key)
         cfg = _cache_config()
-        client = LedgixClient(config=cfg)
+        client = BylawClient(config=cfg)
 
         req = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 50})
 
@@ -231,7 +231,7 @@ class TestSyncCache:
         token_a = _make_jwt(ed25519_private_key, "req-a-001")
         token_b = _make_jwt(ed25519_private_key, "req-b-001")
         cfg = _cache_config()
-        client = LedgixClient(config=cfg)
+        client = BylawClient(config=cfg)
 
         req_a = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 50}, agent_id="agent-A")
         req_b = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 50}, agent_id="agent-B")
@@ -260,7 +260,7 @@ class TestSyncCache:
             max_retries=0,
             # decision_cache_enabled defaults to False
         )
-        client = LedgixClient(config=cfg)
+        client = BylawClient(config=cfg)
         assert client._decision_cache is None
 
         req = ClearanceRequest(tool_name="t", tool_args={})
@@ -278,7 +278,7 @@ class TestSyncCache:
     def test_mint_token_vault_error_raises(self, ed25519_private_key):
         token = _make_jwt(ed25519_private_key)
         cfg = _cache_config()
-        client = LedgixClient(config=cfg)
+        client = BylawClient(config=cfg)
         req = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 50})
 
         with respx.mock(base_url="https://vault.test") as mock:
@@ -301,7 +301,7 @@ class TestAsyncCache:
         token = _make_jwt(ed25519_private_key)
         mint_token = _make_jwt(ed25519_private_key, "req-mint-async-001")
         cfg = _cache_config()
-        client = LedgixClient(config=cfg)
+        client = BylawClient(config=cfg)
 
         async with respx.mock(base_url="https://vault.test") as mock:
             clearance_route = mock.post("/request-clearance").mock(
@@ -328,7 +328,7 @@ class TestAsyncCache:
     async def test_async_clear_cache(self, ed25519_private_key):
         token = _make_jwt(ed25519_private_key)
         cfg = _cache_config()
-        client = LedgixClient(config=cfg)
+        client = BylawClient(config=cfg)
 
         req = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 50})
 
@@ -350,7 +350,7 @@ class TestAsyncCache:
     async def test_async_mint_token_vault_error_raises(self, ed25519_private_key):
         token = _make_jwt(ed25519_private_key)
         cfg = _cache_config()
-        client = LedgixClient(config=cfg)
+        client = BylawClient(config=cfg)
         req = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 50})
 
         async with respx.mock(base_url="https://vault.test") as mock:

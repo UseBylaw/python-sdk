@@ -1,6 +1,6 @@
-# Ledgix ALCV — Python SDK
+# Bylaw ALCV — Python SDK
 
-[![PyPI](https://img.shields.io/badge/pypi-v0.1.13-blue)](https://pypi.org/project/ledgix-python/)
+[![PyPI](https://img.shields.io/badge/pypi-v0.5.0-blue)](https://pypi.org/project/bylaw-python/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -9,11 +9,11 @@ Agent-agnostic compliance shim for SOX 404 policy enforcement. Intercepts AI age
 ## Quick Start
 
 ```bash
-pip install ledgix-python
+pip install bylaw-python
 ```
 
 ```python
-# ledgix.yaml
+# bylaw.yaml
 # enforce:
 #   - tool: "stripe_*"
 #     policy_id: "financial-high-risk"
@@ -21,53 +21,53 @@ pip install ledgix-python
 #     policy_id: "default"
 
 import tools
-import ledgix_python as ledgix
+import bylaw_python as bylaw
 
-ledgix.configure(agent_id="payments-agent")
-ledgix.auto_instrument(tools)
+bylaw.configure(agent_id="payments-agent")
+bylaw.auto_instrument(tools)
 
 result = tools.stripe_refund(45, "Late package")
 print(result)
 ```
 
-`auto_instrument()` reads `ledgix.yaml`, `ledgix.yml`, or `ledgix.json` from the current working directory by default, wraps matching functions in place, and leaves unmatched functions alone.
+`auto_instrument()` reads `bylaw.yaml`, `bylaw.yml`, or `bylaw.json` from the current working directory by default, wraps matching functions in place, and leaves unmatched functions alone.
 
 ## Configuration
 
-Set environment variables (prefix: `LEDGIX_`):
+Set environment variables (prefix: `BYLAW_`):
 
 | Variable | Default | Description |
 |---|---|---|
-| `LEDGIX_VAULT_URL` | `http://localhost:8000` | Vault server URL |
-| `LEDGIX_VAULT_API_KEY` | `""` | API key for Vault auth |
-| `LEDGIX_VAULT_TIMEOUT` | `30.0` | Request timeout (seconds) |
-| `LEDGIX_VERIFY_JWT` | `true` | Verify A-JWT signatures |
-| `LEDGIX_JWT_ISSUER` | `alcv-vault` | Expected A-JWT issuer |
-| `LEDGIX_JWT_AUDIENCE` | `ledgix-sdk` | Expected A-JWT audience |
-| `LEDGIX_AGENT_ID` | `default-agent` | Agent identifier |
+| `BYLAW_VAULT_URL` | `http://localhost:8000` | Vault server URL |
+| `BYLAW_VAULT_API_KEY` | `""` | API key for Vault auth |
+| `BYLAW_VAULT_TIMEOUT` | `30.0` | Request timeout (seconds) |
+| `BYLAW_VERIFY_JWT` | `true` | Verify A-JWT signatures |
+| `BYLAW_JWT_ISSUER` | `alcv-vault` | Expected A-JWT issuer |
+| `BYLAW_JWT_AUDIENCE` | `ledgix-sdk` | Expected A-JWT audience |
+| `BYLAW_AGENT_ID` | `default-agent` | Agent identifier |
 
 Or pass a `VaultConfig` directly:
 
 ```python
-from ledgix_python import LedgixClient, VaultConfig
+from bylaw_python import BylawClient, VaultConfig
 
 config = VaultConfig(vault_url="https://vault.mycompany.com", vault_api_key="sk-...")
-client = LedgixClient(config=config)
+client = BylawClient(config=config)
 ```
 
 ## Manifest-driven auto-instrumentation
 
 ```python
 import tools
-import ledgix_python as ledgix
+import bylaw_python as bylaw
 
-ledgix.configure(agent_id="payments-agent")
+bylaw.configure(agent_id="payments-agent")
 
-# Auto-discover ledgix.yaml / ledgix.yml / ledgix.json from the CWD
-wrapped = ledgix.auto_instrument(tools)
+# Auto-discover bylaw.yaml / bylaw.yml / bylaw.json from the CWD
+wrapped = bylaw.auto_instrument(tools)
 
 # Or pass an inline manifest
-ledgix.auto_instrument(
+bylaw.auto_instrument(
     tools,
     manifest={"enforce": [{"tool": "stripe_*", "policy_id": "financial-high-risk"}]},
 )
@@ -76,19 +76,19 @@ ledgix.auto_instrument(
 YAML manifests require `pyyaml`:
 
 ```bash
-pip install ledgix-python[yaml]
+pip install bylaw-python[yaml]
 ```
 
 ### Escape hatch
 
 ```python
-@ledgix.tool
+@bylaw.tool
 def special_refund(amount: float):
-    return ledgix.current_token()
+    return bylaw.current_token()
 
-@ledgix.tool(policy_id="override-policy")
+@bylaw.tool(policy_id="override-policy")
 def stripe_charge(amount: float):
-    return ledgix.current_token()
+    return bylaw.current_token()
 ```
 
 ## Framework Adapters
@@ -96,28 +96,28 @@ def stripe_charge(amount: float):
 ### LangChain
 
 ```bash
-pip install ledgix-python[langchain]
+pip install bylaw-python[langchain]
 ```
 
 ```python
-from ledgix_python.adapters.langchain import LedgixCallbackHandler, LedgixTool
+from bylaw_python.adapters.langchain import BylawCallbackHandler, BylawTool
 
 # Option 1: Callback handler (intercepts ALL tool calls)
-handler = LedgixCallbackHandler(client)
+handler = BylawCallbackHandler(client)
 agent = create_agent(callbacks=[handler])
 
 # Option 2: Wrap individual tools
-guarded_tool = LedgixTool.wrap(client, my_tool, policy_id="refund-policy")
+guarded_tool = BylawTool.wrap(client, my_tool, policy_id="refund-policy")
 ```
 
 ### LlamaIndex
 
 ```bash
-pip install ledgix-python[llamaindex]
+pip install bylaw-python[llamaindex]
 ```
 
 ```python
-from ledgix_python.adapters.llamaindex import wrap_tool
+from bylaw_python.adapters.llamaindex import wrap_tool
 
 guarded_tool = wrap_tool(client, my_function_tool, policy_id="refund-policy")
 ```
@@ -125,19 +125,19 @@ guarded_tool = wrap_tool(client, my_function_tool, policy_id="refund-policy")
 ### CrewAI
 
 ```bash
-pip install ledgix-python[crewai]
+pip install bylaw-python[crewai]
 ```
 
 ```python
-from ledgix_python.adapters.crewai import LedgixCrewAITool
+from bylaw_python.adapters.crewai import BylawCrewAITool
 
-guarded_tool = LedgixCrewAITool.wrap(client, my_tool, policy_id="refund-policy")
+guarded_tool = BylawCrewAITool.wrap(client, my_tool, policy_id="refund-policy")
 ```
 
 ## Context Manager
 
 ```python
-from ledgix_python import VaultContext
+from bylaw_python import VaultContext
 
 with VaultContext(client, "stripe_refund", {"amount": 45}) as ctx:
     print(ctx.clearance.token)  # Use the A-JWT
@@ -150,7 +150,7 @@ async with VaultContext(client, "stripe_refund", {"amount": 45}) as ctx:
 ## Error Handling
 
 ```python
-from ledgix_python import ClearanceDeniedError, VaultConnectionError, TokenVerificationError
+from bylaw_python import ClearanceDeniedError, VaultConnectionError, TokenVerificationError
 
 try:
     result = process_refund(amount=5000, reason="...")
@@ -165,7 +165,7 @@ except TokenVerificationError:
 ## Development
 
 ```bash
-git clone https://github.com/ledgix-dev/python-sdk.git
+git clone https://github.com/bylaw-dev/python-sdk.git
 cd python-sdk
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"

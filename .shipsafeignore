@@ -1,5 +1,5 @@
 # Ship Safe ignore rules for python-sdk
-# Published as ledgix-python on PyPI. Agent-agnostic SDK shim.
+# Published as bylaw-python on PyPI. Agent-agnostic SDK shim.
 
 # --- Test fixtures ---
 
@@ -9,7 +9,7 @@ Generic API Key Assignment
 # Test assertions use == for values, not secrets.
 TIMING_ATTACK_COMPARISON
 
-# --- CLI (ledgix init / status / teardown) ---
+# --- CLI (bylaw init / status / teardown) ---
 
 # CLI commands invoke docker-compose and subprocess.run for local dev
 # orchestration. These are user-invoked commands, not LLM-driven actions.

@@ -1,11 +1,11 @@
-# Ledgix ALCV — LlamaIndex Adapter
+# Bylaw ALCV — LlamaIndex Adapter
 # Wraps LlamaIndex tools with Vault clearance enforcement
 
 from __future__ import annotations
 
 from typing import Any
 
-from ..client import LedgixClient
+from ..client import BylawClient
 from ._core import build_clearance_request, resolve_client
 
 try:
@@ -13,29 +13,29 @@ try:
 except ImportError as exc:
     raise ImportError(
         "LlamaIndex adapter requires llama-index-core. "
-        "Install with: pip install ledgix-python[llamaindex]"
+        "Install with: pip install bylaw-python[llamaindex]"
     ) from exc
 
 
-class LedgixToolWrapper:
+class BylawToolWrapper:
     """Wraps a LlamaIndex tool with Vault clearance enforcement.
 
     Usage with explicit client::
 
         from llama_index.core.tools import FunctionTool
-        from ledgix_python.adapters.llamaindex import LedgixToolWrapper
+        from bylaw_python.adapters.llamaindex import BylawToolWrapper
 
         tool = FunctionTool.from_defaults(fn=my_tool, name="search")
-        guarded = LedgixToolWrapper(client, tool)
+        guarded = BylawToolWrapper(client, tool)
 
-    Usage after :func:`ledgix_python.configure`::
+    Usage after :func:`bylaw_python.configure`::
 
-        guarded = LedgixToolWrapper(tool=tool)
+        guarded = BylawToolWrapper(tool=tool)
     """
 
     def __init__(
         self,
-        client: LedgixClient | None = None,
+        client: BylawClient | None = None,
         tool: FunctionTool | None = None,
         *,
         policy_id: str | None = None,
@@ -47,11 +47,11 @@ class LedgixToolWrapper:
         # Create the wrapped tool
         self.tool = FunctionTool.from_defaults(
             fn=self._guarded_call,
-            name=f"ledgix_{tool.metadata.name}",  # type: ignore[union-attr]
+            name=f"bylaw_{tool.metadata.name}",  # type: ignore[union-attr]
             description=tool.metadata.description or "",  # type: ignore[union-attr]
         )
 
-    def _resolve_client(self) -> LedgixClient:
+    def _resolve_client(self) -> BylawClient:
         return resolve_client(self._client)
 
     def _guarded_call(self, **kwargs: Any) -> Any:
@@ -69,7 +69,7 @@ class LedgixToolWrapper:
 
 
 def wrap_tool(
-    client_or_tool: LedgixClient | FunctionTool,
+    client_or_tool: BylawClient | FunctionTool,
     tool: FunctionTool | None = None,
     *,
     policy_id: str | None = None,
@@ -81,10 +81,10 @@ def wrap_tool(
     Supports two call signatures:
 
     - ``wrap_tool(client, tool, policy_id=...)`` — explicit client
-    - ``wrap_tool(tool, policy_id=...)`` — uses global client from :func:`ledgix_python.configure`
+    - ``wrap_tool(tool, policy_id=...)`` — uses global client from :func:`bylaw_python.configure`
     """
-    if isinstance(client_or_tool, LedgixClient):
-        wrapper = LedgixToolWrapper(client_or_tool, tool, policy_id=policy_id)
+    if isinstance(client_or_tool, BylawClient):
+        wrapper = BylawToolWrapper(client_or_tool, tool, policy_id=policy_id)
     else:
-        wrapper = LedgixToolWrapper(None, client_or_tool, policy_id=policy_id)
+        wrapper = BylawToolWrapper(None, client_or_tool, policy_id=policy_id)
     return wrapper.tool

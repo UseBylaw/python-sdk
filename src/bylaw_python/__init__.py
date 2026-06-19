@@ -1,29 +1,29 @@
-# Ledgix ALCV — Python SDK
+# Bylaw ALCV — Python SDK
 # Agent-agnostic compliance shim for SOX 404 policy enforcement
 #
 # Recommended usage:
-#   import ledgix_python as ledgix
+#   import bylaw_python as bylaw
 #
-#   ledgix.configure(agent_id="finance-agent")
+#   bylaw.configure(agent_id="finance-agent")
 #
 #   import tools
 #
-#   ledgix.configure(agent_id="finance-agent")
-#   ledgix.auto_instrument(tools)
+#   bylaw.configure(agent_id="finance-agent")
+#   bylaw.auto_instrument(tools)
 #
 # Explicit API (advanced):
-#   from ledgix_python import LedgixClient, vault_enforce, VaultConfig
+#   from bylaw_python import BylawClient, vault_enforce, VaultConfig
 #
-#   client = LedgixClient()
+#   client = BylawClient()
 #
 #   @vault_enforce(client, tool_name="stripe_refund")
 #   def process_refund(amount: float, reason: str, **kwargs):
 #       token = kwargs.get("_clearance").token
 #       ...
 
-"""Ledgix ALCV — agent-agnostic compliance shim for SOX 404 enforcement."""
+"""Bylaw ALCV — agent-agnostic compliance shim for SOX 404 enforcement."""
 
-from .client import LedgixClient
+from .client import BylawClient
 from .config import VaultConfig
 from .enforce import (
     VaultContext,
@@ -40,7 +40,7 @@ from .exceptions import (
     ClearanceDeniedError,
     ManualReviewTimeoutError,
     PolicyRegistrationError,
-    LedgixError,
+    BylawError,
     QueueSaturatedError,
     ReplayDetectedError,
     ReviewPendingError,
@@ -64,11 +64,11 @@ from .models import (
     PolicyRegistrationResponse,
 )
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 __all__ = [
     # Core
-    "LedgixClient",
+    "BylawClient",
     "VaultConfig",
     # Low-code API
     "configure",
@@ -102,7 +102,7 @@ __all__ = [
     "PolicyRegistration",
     "PolicyRegistrationResponse",
     # Exceptions
-    "LedgixError",
+    "BylawError",
     "ClearanceDeniedError",
     "ManualReviewTimeoutError",
     "QueueSaturatedError",

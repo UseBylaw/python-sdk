@@ -1,4 +1,4 @@
-"""Ledgix CLI — local dev quickstart and management commands."""
+"""Bylaw CLI — local dev quickstart and management commands."""
 
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ from pathlib import Path
 
 import click
 
-COMPOSE_FILE = "docker-compose.ledgix.yml"
-ENV_FILE = ".env.ledgix"
-MANIFEST_FILE = "ledgix.yaml"
+COMPOSE_FILE = "docker-compose.bylaw.yml"
+ENV_FILE = ".env.bylaw"
+MANIFEST_FILE = "bylaw.yaml"
 
 VAULT_PORT = 8080
 JUDGE_PORT = 8000
@@ -28,31 +28,31 @@ COMPOSE_TEMPLATE = textwrap.dedent("""\
     services:
       postgres:
         image: pgvector/pgvector:pg16
-        container_name: ledgix_dev_postgres
+        container_name: bylaw_dev_postgres
         restart: unless-stopped
         ports:
           - "127.0.0.1:{postgres_port}:5432"
         environment:
-          POSTGRES_USER: ledgix
-          POSTGRES_PASSWORD: ledgix-dev
-          POSTGRES_DB: ledgix_dev
+          POSTGRES_USER: bylaw
+          POSTGRES_PASSWORD: bylaw-dev
+          POSTGRES_DB: bylaw_dev
         volumes:
-          - ledgix_pgdata:/var/lib/postgresql/data
+          - bylaw_pgdata:/var/lib/postgresql/data
         healthcheck:
-          test: ["CMD-SHELL", "pg_isready -U ledgix"]
+          test: ["CMD-SHELL", "pg_isready -U bylaw"]
           interval: 5s
           timeout: 3s
           retries: 10
 
       vault:
-        image: ghcr.io/ledgix-dev/alcv-vault:latest
-        container_name: ledgix_dev_vault
+        image: ghcr.io/bylaw-dev/alcv-vault:latest
+        container_name: bylaw_dev_vault
         restart: unless-stopped
         ports:
           - "127.0.0.1:{vault_port}:8000"
         environment:
           VAULT_PORT: "8000"
-          VAULT_JUDGE_URL: http://ledgix_dev_judge:8000
+          VAULT_JUDGE_URL: http://bylaw_dev_judge:8000
           VAULT_JWT_ISSUER: alcv-vault
           VAULT_JWT_AUDIENCE: ledgix-sdk
           VAULT_JWT_TTL: "300"
@@ -60,20 +60,20 @@ COMPOSE_TEMPLATE = textwrap.dedent("""\
           VAULT_ALLOW_INSECURE_DEV_MODE: "true"
           VAULT_DEV_TENANT_ID: {tenant_id}
           VAULT_DEV_API_KEY: {api_key}
-          VAULT_DEV_DB_URL: postgres://ledgix:ledgix-dev@ledgix_dev_postgres:5432/ledgix_dev?sslmode=disable
+          VAULT_DEV_DB_URL: postgres://bylaw:bylaw-dev@bylaw_dev_postgres:5432/bylaw_dev?sslmode=disable
           VAULT_RATE_LIMIT_RPS: "0"
         depends_on:
           postgres:
             condition: service_healthy
         networks:
-          - ledgix_dev_net
+          - bylaw_dev_net
 
       judge:
-        image: ghcr.io/ledgix-dev/llm-judge:latest
-        container_name: ledgix_dev_judge
+        image: ghcr.io/bylaw-dev/llm-judge:latest
+        container_name: bylaw_dev_judge
         restart: unless-stopped
         environment:
-          DATABASE_URL: postgres://ledgix:ledgix-dev@ledgix_dev_postgres:5432/ledgix_dev?sslmode=disable
+          DATABASE_URL: postgres://bylaw:bylaw-dev@bylaw_dev_postgres:5432/bylaw_dev?sslmode=disable
           EMBEDDING_MODEL: bedrock/amazon.titan-embed-text-v2:0
           EVAL_MODEL: bedrock/amazon.nova-pro-v1:0
           AWS_REGION: us-east-1
@@ -82,7 +82,7 @@ COMPOSE_TEMPLATE = textwrap.dedent("""\
           postgres:
             condition: service_healthy
         networks:
-          - ledgix_dev_net
+          - bylaw_dev_net
         healthcheck:
           test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
           interval: 10s
@@ -91,16 +91,16 @@ COMPOSE_TEMPLATE = textwrap.dedent("""\
           start_period: 10s
 
     volumes:
-      ledgix_pgdata:
+      bylaw_pgdata:
 
     networks:
-      ledgix_dev_net:
+      bylaw_dev_net:
         driver: bridge
 """)
 
 MANIFEST_TEMPLATE = textwrap.dedent("""\
-    # Ledgix manifest — maps tool names to policy IDs.
-    # See https://docs.ledgix.dev/sdk/manifest for full syntax.
+    # Bylaw manifest — maps tool names to policy IDs.
+    # See https://docs.bylaw.dev/sdk/manifest for full syntax.
     version: "1"
     defaults:
       review_mode: block
@@ -140,7 +140,7 @@ def _compose_base() -> list[str]:
     if not cmd:
         click.echo("Error: docker compose is not available.", err=True)
         sys.exit(1)
-    return [*cmd, "-f", COMPOSE_FILE, "-p", "ledgix-dev"]
+    return [*cmd, "-f", COMPOSE_FILE, "-p", "bylaw-dev"]
 
 
 def _poll_health(url: str, timeout: int = 90) -> bool:
@@ -162,9 +162,9 @@ def _poll_health(url: str, timeout: int = 90) -> bool:
 
 
 @click.group()
-@click.version_option(package_name="ledgix-python")
+@click.version_option(package_name="bylaw-python")
 def main():
-    """Ledgix CLI — local development tools for the ALCV platform."""
+    """Bylaw CLI — local development tools for the ALCV platform."""
     pass
 
 
@@ -174,7 +174,7 @@ def main():
 @click.option("--tenant-id", default=DEV_TENANT, help="Dev tenant ID")
 @click.option("--skip-health-check", is_flag=True, help="Don't wait for services to become healthy")
 def init(vault_port: int, api_key: str, tenant_id: str, skip_health_check: bool):
-    """Scaffold and start a local Ledgix dev environment.
+    """Scaffold and start a local Bylaw dev environment.
 
     Creates docker-compose, env, and manifest files, then starts all
     services. On a clean machine with Docker, first clearance request
@@ -210,9 +210,9 @@ def init(vault_port: int, api_key: str, tenant_id: str, skip_health_check: bool)
         click.echo(f"  {ENV_FILE} already exists, skipping.")
     else:
         env_content = "\n".join([
-            f"LEDGIX_VAULT_URL=http://localhost:{vault_port}",
-            f"LEDGIX_VAULT_API_KEY={api_key}",
-            f"LEDGIX_AGENT_ID={DEV_AGENT_ID}",
+            f"BYLAW_VAULT_URL=http://localhost:{vault_port}",
+            f"BYLAW_VAULT_API_KEY={api_key}",
+            f"BYLAW_AGENT_ID={DEV_AGENT_ID}",
             "",
         ])
         env_path.write_text(env_content)
@@ -241,12 +241,12 @@ def init(vault_port: int, api_key: str, tenant_id: str, skip_health_check: bool)
         else:
             click.echo(
                 f"  Warning: Vault did not respond at {vault_url} within 90s.\n"
-                "  Run 'ledgix status' to check, or 'docker compose -f docker-compose.ledgix.yml logs' for details.",
+                "  Run 'bylaw status' to check, or 'docker compose -f docker-compose.bylaw.yml logs' for details.",
                 err=True,
             )
 
     click.echo("\n" + "=" * 56)
-    click.echo("  Ledgix dev environment is ready!")
+    click.echo("  Bylaw dev environment is ready!")
     click.echo("=" * 56)
     click.echo(f"""
   Vault:     http://localhost:{vault_port}
@@ -257,18 +257,18 @@ def init(vault_port: int, api_key: str, tenant_id: str, skip_health_check: bool)
 
     1. Add to your agent:
 
-       import ledgix_python as ledgix
-       ledgix.configure(
+       import bylaw_python as bylaw
+       bylaw.configure(
            vault_url="http://localhost:{vault_port}",
            vault_api_key="{api_key}",
            agent_id="{DEV_AGENT_ID}",
        )
-       ledgix.auto_instrument(tools)
+       bylaw.auto_instrument(tools)
 
     2. Or source the env file and configure() picks it up:
 
        source {ENV_FILE}   # or: set -a; . {ENV_FILE}; set +a
-       ledgix.configure()
+       bylaw.configure()
 
     3. Upload a policy:
 
@@ -282,10 +282,10 @@ def init(vault_port: int, api_key: str, tenant_id: str, skip_health_check: bool)
 
 @main.command()
 def status():
-    """Check whether the local Ledgix dev environment is running."""
+    """Check whether the local Bylaw dev environment is running."""
     if not (Path.cwd() / COMPOSE_FILE).exists():
         click.echo(f"No {COMPOSE_FILE} found in current directory.")
-        click.echo("Run 'ledgix init' to create a local dev environment.")
+        click.echo("Run 'bylaw init' to create a local dev environment.")
         return
 
     base = _compose_base()
@@ -314,7 +314,7 @@ def status():
                         pass
 
     if not containers:
-        click.echo("No containers running. Run 'ledgix init' to start.")
+        click.echo("No containers running. Run 'bylaw init' to start.")
         return
 
     click.echo(f"{'Service':<20} {'State':<12} {'Health':<12} {'Ports'}")
@@ -339,9 +339,9 @@ def status():
 
 @main.command()
 @click.option("--volumes", is_flag=True, help="Also remove data volumes")
-@click.confirmation_option(prompt="This will stop and remove all Ledgix dev containers. Continue?")
+@click.confirmation_option(prompt="This will stop and remove all Bylaw dev containers. Continue?")
 def teardown(volumes: bool):
-    """Stop and remove the local Ledgix dev environment."""
+    """Stop and remove the local Bylaw dev environment."""
     compose_path = Path.cwd() / COMPOSE_FILE
     if not compose_path.exists():
         click.echo(f"No {COMPOSE_FILE} found in current directory. Nothing to tear down.")
@@ -357,7 +357,7 @@ def teardown(volumes: bool):
         click.echo(f"Error during teardown:\n{result.stderr}", err=True)
         sys.exit(1)
 
-    click.echo("Ledgix dev environment stopped and removed.")
+    click.echo("Bylaw dev environment stopped and removed.")
     if volumes:
         click.echo("Data volumes removed.")
 

@@ -1,4 +1,4 @@
-# Ledgix ALCV — Client-side counterparty hints
+# Bylaw ALCV — Client-side counterparty hints
 #
 # Mirrors vault/internal/counterparty: best-effort extraction of the
 # destination provider/URI/account from a tool name + tool_args dict.

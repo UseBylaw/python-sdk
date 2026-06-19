@@ -1,4 +1,4 @@
-# Ledgix ALCV — Data Models
+# Bylaw ALCV — Data Models
 # Pydantic models for Vault API request/response payloads
 
 from __future__ import annotations

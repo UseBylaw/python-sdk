@@ -1,4 +1,4 @@
-# Ledgix ALCV — Test Fixtures
+# Bylaw ALCV — Test Fixtures
 # Shared fixtures for the entire test suite
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import respx
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from httpx import Response
 
-from ledgix_python import LedgixClient, VaultConfig
+from bylaw_python import BylawClient, VaultConfig
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -139,15 +139,15 @@ def vault_config_retry() -> VaultConfig:
 
 
 @pytest.fixture
-def client(vault_config: VaultConfig) -> LedgixClient:
-    c = LedgixClient(config=vault_config)
+def client(vault_config: VaultConfig) -> BylawClient:
+    c = BylawClient(config=vault_config)
     yield c
     c.close()
 
 
 @pytest.fixture
-def client_with_jwt(vault_config_with_jwt: VaultConfig) -> LedgixClient:
-    c = LedgixClient(config=vault_config_with_jwt)
+def client_with_jwt(vault_config_with_jwt: VaultConfig) -> BylawClient:
+    c = BylawClient(config=vault_config_with_jwt)
     yield c
     c.close()
 

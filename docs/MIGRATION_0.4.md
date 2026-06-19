@@ -1,4 +1,4 @@
-# Migrating from `ledgix-python` 0.3.x to 0.4.0
+# Migrating from `bylaw-python` 0.3.x to 0.4.0
 
 `0.4.0` is a breaking release. The wire format between the SDK and the
 Vault now uses **categorical confidence buckets** instead of a decimal
@@ -131,8 +131,8 @@ failure modes that the bucket migration eliminates:
 
 ## Where to ask questions
 
-- General SDK questions: file an issue on the `ledgix-python` repo.
-- Migration help: ping `team@ledgix.dev` with `[0.4 migration]` in the
+- General SDK questions: file an issue on the `bylaw-python` repo.
+- Migration help: ping `team@bylaw.dev` with `[0.4 migration]` in the
   subject line.
 - Vault wire-format questions: see the `vault` repo's
   `docs/api/clearance.md`.

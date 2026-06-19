@@ -1,9 +1,39 @@
 # Changelog
 
-All notable changes to `ledgix-python` will be documented in this file.
+All notable changes to `bylaw-python` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.5.0]
+
+### Breaking changes — Ledgix → Bylaw rebrand
+
+The SDK has been rebranded from Ledgix to Bylaw. See
+[`docs/MIGRATION_0.5.md`](docs/MIGRATION_0.5.md) for the full migration guide.
+
+#### Package & CLI
+- PyPI package: `bylaw-python` (replaces `ledgix-python`)
+- CLI command: `bylaw` (replaces `ledgix`)
+- Import path: `bylaw_python` (replaces `ledgix_python`)
+
+#### Renamed public API
+- `LedgixClient` → `BylawClient`
+- `LedgixError` → `BylawError`
+- `LedgixCallbackHandler` → `BylawCallbackHandler`
+- `LedgixTool` → `BylawTool` (LangChain adapter)
+- `LedgixToolWrapper` → `BylawToolWrapper` (LlamaIndex adapter)
+- `LedgixCrewAITool` → `BylawCrewAITool`
+
+#### Configuration
+- Environment variable prefix: `BYLAW_` (replaces `LEDGIX_`)
+- Manifest filenames: `bylaw.yaml` / `bylaw.yml` / `bylaw.json` (replaces `ledgix.*`)
+- Dev compose file: `docker-compose.bylaw.yml` (replaces `docker-compose.ledgix.yml`)
+
+#### Unchanged (Vault wire protocol)
+- JWT audience default remains `ledgix-sdk` until the Vault server rebrand ships
+- Audit ledger hash prefixes (`ledgix.audit.*`) unchanged for merkle compatibility
+- Webhook header `X-Ledgix-Signature` unchanged until Vault emits the new header
 
 ## [0.4.0]
 
@@ -71,7 +101,7 @@ couldn't reliably produce and gives review-pending its own dedicated state.
   breakdowns.
 - All four fields are also surfaced as kwargs on `enforce()`, `tool()`,
   `vault_enforce()`, and `VaultContext` so the high-level decorator API
-  can populate them without dropping to `LedgixClient.request_clearance`.
+  can populate them without dropping to `BylawClient.request_clearance`.
 - `/mint-token` cache-replay forwards the new fields alongside the 0.3.0
   destination set.
 
@@ -87,7 +117,7 @@ couldn't reliably produce and gives review-pending its own dedicated state.
   `destination_account_ref` — typed counterparty attribution that replaces
   per-tool guessing in downstream policy checks. All three fields are
   optional; existing callers are unaffected.
-- `ledgix_python.counterparty.extract()` — best-effort SDK-side hint that
+- `bylaw_python.counterparty.extract()` — best-effort SDK-side hint that
   fills the new fields when the caller doesn't supply them. Recognizes
   Stripe (`api_key` prefix → 12-char account ref), Twilio (`account_sid`),
   Slack (`team_id` / `workspace`), AWS Bedrock (`model_id`), OpenAI

@@ -1,4 +1,4 @@
-# Ledgix ALCV — Adapter Core Helpers
+# Bylaw ALCV — Adapter Core Helpers
 # Shared scaffolding used by the LangChain, LlamaIndex, and CrewAI adapters.
 # Framework-specific glue (callback handlers, sync vs async, error-translation
 # policy) stays per-adapter — only the genuinely identical pieces live here.
@@ -7,14 +7,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..client import LedgixClient
+from ..client import BylawClient
 from ..enforce import _get_default_client
 from ..models import ClearanceRequest
 
 
-def resolve_client(client: LedgixClient | None) -> LedgixClient:
+def resolve_client(client: BylawClient | None) -> BylawClient:
     """Return the explicit client or fall back to the module-level default
-    configured via :func:`ledgix_python.configure`.
+    configured via :func:`bylaw_python.configure`.
     """
     if client is not None:
         return client
@@ -25,7 +25,7 @@ def build_clearance_request(
     *,
     tool_name: str,
     tool_args: dict[str, Any],
-    client: LedgixClient,
+    client: BylawClient,
     policy_id: str | None = None,
     extra_context: dict[str, Any] | None = None,
     data_categories: list[str] | None = None,

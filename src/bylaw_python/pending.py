@@ -1,4 +1,4 @@
-# Ledgix ALCV — PendingApproval
+# Bylaw ALCV — PendingApproval
 # Handle for detached manual-review decisions
 
 from __future__ import annotations
@@ -7,14 +7,14 @@ import time
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .client import LedgixClient
+    from .client import BylawClient
     from .models import ClearanceResponse
 
 
 class PendingApproval:
     """Handle for a clearance request that entered ``pending_review`` status.
 
-    Obtained when ``review_mode="detach"`` is set on :class:`~ledgix_python.VaultConfig`
+    Obtained when ``review_mode="detach"`` is set on :class:`~bylaw_python.VaultConfig`
     and the Vault returns a ``pending_review`` response.
 
     Usage (async)::
@@ -37,7 +37,7 @@ class PendingApproval:
     def __init__(
         self,
         request_id: str,
-        client: "LedgixClient",
+        client: "BylawClient",
         initial_response: "ClearanceResponse",
     ) -> None:
         self._request_id = request_id

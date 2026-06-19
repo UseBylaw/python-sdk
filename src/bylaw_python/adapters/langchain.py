@@ -1,11 +1,11 @@
-# Ledgix ALCV — LangChain Adapter
+# Bylaw ALCV — LangChain Adapter
 # Provides a callback handler and tool wrapper for LangChain integration
 
 from __future__ import annotations
 
 from typing import Any
 
-from ..client import LedgixClient
+from ..client import BylawClient
 from ..exceptions import ClearanceDeniedError
 from ._core import build_clearance_request, resolve_client
 
@@ -15,31 +15,31 @@ try:
 except ImportError as exc:
     raise ImportError(
         "LangChain adapter requires langchain-core. "
-        "Install with: pip install ledgix-python[langchain]"
+        "Install with: pip install bylaw-python[langchain]"
     ) from exc
 
 
-class LedgixCallbackHandler(BaseCallbackHandler):
+class BylawCallbackHandler(BaseCallbackHandler):
     """LangChain callback handler that intercepts tool calls for Vault clearance.
 
     Usage::
 
-        from ledgix_python.adapters.langchain import LedgixCallbackHandler
+        from bylaw_python.adapters.langchain import BylawCallbackHandler
 
-        handler = LedgixCallbackHandler(client)
+        handler = BylawCallbackHandler(client)
         agent = create_agent(callbacks=[handler])
 
-    If :func:`ledgix_python.configure` has been called, *client* may be omitted::
+    If :func:`bylaw_python.configure` has been called, *client* may be omitted::
 
-        handler = LedgixCallbackHandler()
+        handler = BylawCallbackHandler()
     """
 
-    def __init__(self, client: LedgixClient | None = None, *, policy_id: str | None = None) -> None:
+    def __init__(self, client: BylawClient | None = None, *, policy_id: str | None = None) -> None:
         self._client = client
         self.policy_id = policy_id
 
     @property
-    def client(self) -> LedgixClient:
+    def client(self) -> BylawClient:
         return resolve_client(self._client)
 
     def on_tool_start(
@@ -71,25 +71,25 @@ class LedgixCallbackHandler(BaseCallbackHandler):
         self.client.request_clearance(request)
 
 
-class LedgixTool(BaseTool):
+class BylawTool(BaseTool):
     """Wraps an existing LangChain tool with Vault clearance enforcement.
 
     Usage with explicit client::
 
         from langchain_community.tools import SomeTool
-        from ledgix_python.adapters.langchain import LedgixTool
+        from bylaw_python.adapters.langchain import BylawTool
 
-        guarded_tool = LedgixTool.wrap(client, SomeTool(), policy_id="refund-policy")
+        guarded_tool = BylawTool.wrap(client, SomeTool(), policy_id="refund-policy")
 
-    Usage after :func:`ledgix_python.configure`::
+    Usage after :func:`bylaw_python.configure`::
 
-        guarded_tool = LedgixTool.wrap(SomeTool(), policy_id="refund-policy")
+        guarded_tool = BylawTool.wrap(SomeTool(), policy_id="refund-policy")
     """
 
     name: str = ""
     description: str = ""
     _inner_tool: BaseTool
-    _client: LedgixClient | None
+    _client: BylawClient | None
     _policy_id: str | None
 
     class Config:
@@ -99,37 +99,37 @@ class LedgixTool(BaseTool):
     def __init__(
         self,
         inner_tool: BaseTool,
-        client: LedgixClient | None = None,
+        client: BylawClient | None = None,
         *,
         policy_id: str | None = None,
     ) -> None:
         super().__init__(
-            name=f"ledgix_{inner_tool.name}",
+            name=f"bylaw_{inner_tool.name}",
             description=inner_tool.description,
         )
         self._inner_tool = inner_tool
         self._client = client
         self._policy_id = policy_id
 
-    def _resolve_client(self) -> LedgixClient:
+    def _resolve_client(self) -> BylawClient:
         return resolve_client(self._client)
 
     @classmethod
     def wrap(
         cls,
-        client_or_tool: LedgixClient | BaseTool,
+        client_or_tool: BylawClient | BaseTool,
         tool: BaseTool | None = None,
         *,
         policy_id: str | None = None,
-    ) -> LedgixTool:
+    ) -> BylawTool:
         """Convenience factory to wrap a tool.
 
         Supports two call signatures:
 
-        - ``LedgixTool.wrap(client, tool, policy_id=...)`` — explicit client
-        - ``LedgixTool.wrap(tool, policy_id=...)`` — uses global client from :func:`ledgix_python.configure`
+        - ``BylawTool.wrap(client, tool, policy_id=...)`` — explicit client
+        - ``BylawTool.wrap(tool, policy_id=...)`` — uses global client from :func:`bylaw_python.configure`
         """
-        if isinstance(client_or_tool, LedgixClient):
+        if isinstance(client_or_tool, BylawClient):
             return cls(inner_tool=tool, client=client_or_tool, policy_id=policy_id)  # type: ignore[arg-type]
         # client_or_tool is actually the tool; no explicit client
         return cls(inner_tool=client_or_tool, client=None, policy_id=policy_id)

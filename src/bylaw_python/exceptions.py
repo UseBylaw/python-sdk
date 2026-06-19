@@ -1,15 +1,15 @@
-# Ledgix ALCV — Exceptions
+# Bylaw ALCV — Exceptions
 # All custom exceptions for the SDK
 
 from __future__ import annotations
 
 
-class LedgixError(Exception):
-    """Base exception for all Ledgix SDK errors."""
+class BylawError(Exception):
+    """Base exception for all Bylaw SDK errors."""
     pass
 
 
-class ClearanceDeniedError(LedgixError):
+class ClearanceDeniedError(BylawError):
     """Raised when the Vault denies a tool-call clearance request.
 
     Attributes:
@@ -23,7 +23,7 @@ class ClearanceDeniedError(LedgixError):
         super().__init__(f"Clearance denied: {reason}")
 
 
-class ManualReviewTimeoutError(LedgixError):
+class ManualReviewTimeoutError(BylawError):
     """Raised when a pending manual review decision does not resolve before timeout."""
 
     def __init__(self, request_id: str | None = None) -> None:
@@ -32,21 +32,21 @@ class ManualReviewTimeoutError(LedgixError):
         super().__init__(f"Manual review timed out{suffix}")
 
 
-class VaultConnectionError(LedgixError):
+class VaultConnectionError(BylawError):
     """Raised when the SDK cannot reach the Vault server."""
 
     def __init__(self, message: str = "Unable to connect to the Vault server") -> None:
         super().__init__(message)
 
 
-class TokenVerificationError(LedgixError):
+class TokenVerificationError(BylawError):
     """Raised when A-JWT verification fails (bad signature, expired, etc.)."""
 
     def __init__(self, message: str = "Token verification failed") -> None:
         super().__init__(message)
 
 
-class PolicyRegistrationError(LedgixError):
+class PolicyRegistrationError(BylawError):
     """Raised when a policy registration request fails."""
 
     def __init__(self, message: str = "Policy registration failed") -> None:
@@ -68,7 +68,7 @@ class ReplayDetectedError(TokenVerificationError):
         super(TokenVerificationError, self).__init__(f"A-JWT replay detected{suffix}")
 
 
-class QueueSaturatedError(LedgixError):
+class QueueSaturatedError(BylawError):
     """Raised when Vault repeatedly responds with HTTP 429 (queue near capacity).
 
     Vault emits 429 + ``Retry-After`` from its proactive backpressure check
@@ -92,7 +92,7 @@ class QueueSaturatedError(LedgixError):
         )
 
 
-class ReviewPendingError(LedgixError):
+class ReviewPendingError(BylawError):
     """Raised in ``review_mode="detach"`` when a clearance enters pending-review.
 
     The attached :attr:`pending_approval` handle lets the caller poll or cancel

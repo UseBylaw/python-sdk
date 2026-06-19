@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import os
 
-from ledgix_python import ClearanceRequest, LedgixClient, VaultConfig
-from ledgix_python.counterparty import extract
+from bylaw_python import ClearanceRequest, BylawClient, VaultConfig
+from bylaw_python.counterparty import extract
 
 # Test-only dummy key — not a real credential.
 _TEST_STRIPE_KEY = os.environ.get("TEST_STRIPE_API_KEY", "sk_test_" + "abcdefghij1234")
@@ -44,7 +44,7 @@ def test_extract_empty_tool_name_returns_empty() -> None:
 
 
 def test_enrich_request_fills_destination_when_missing() -> None:
-    client = LedgixClient(VaultConfig(vault_url="http://localhost:8000"))
+    client = BylawClient(VaultConfig(vault_url="http://localhost:8000"))
     req = ClearanceRequest(
         tool_name="stripe_charge",
         tool_args={"api_key": _TEST_STRIPE_KEY, "amount": 100},
@@ -56,7 +56,7 @@ def test_enrich_request_fills_destination_when_missing() -> None:
 
 
 def test_enrich_request_caller_destination_wins_over_inference() -> None:
-    client = LedgixClient(VaultConfig(vault_url="http://localhost:8000"))
+    client = BylawClient(VaultConfig(vault_url="http://localhost:8000"))
     req = ClearanceRequest(
         tool_name="stripe_charge",
         tool_args={"api_key": _TEST_STRIPE_KEY},
@@ -70,7 +70,7 @@ def test_enrich_request_caller_destination_wins_over_inference() -> None:
 
 
 def test_enrich_request_unknown_tool_leaves_destination_unset() -> None:
-    client = LedgixClient(VaultConfig(vault_url="http://localhost:8000"))
+    client = BylawClient(VaultConfig(vault_url="http://localhost:8000"))
     req = ClearanceRequest(tool_name="internal.compute", tool_args={"x": 1})
     enriched = client._enrich_request(req)
     assert enriched.destination_provider is None

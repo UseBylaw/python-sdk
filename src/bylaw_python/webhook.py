@@ -1,4 +1,4 @@
-# Ledgix ALCV — Webhook verification helper
+# Bylaw ALCV — Webhook verification helper
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import hmac
 
 
 def verify_webhook(body: bytes | str, signature: str, secret: str) -> bool:
-    """Verify the HMAC-SHA256 signature on an inbound Ledgix webhook.
+    """Verify the HMAC-SHA256 signature on an inbound Bylaw webhook.
 
     The Vault signs every delivery with ``X-Ledgix-Signature: sha256=<hex>``.
     Pass the raw request body, that header value, and your endpoint's signing
@@ -25,11 +25,11 @@ def verify_webhook(body: bytes | str, signature: str, secret: str) -> bool:
     Example::
 
         from flask import request
-        import ledgix_python as ledgix
+        import bylaw_python as bylaw
 
         @app.route("/webhook", methods=["POST"])
         def handle_webhook():
-            if not ledgix.verify_webhook(request.data, request.headers["X-Ledgix-Signature"], SECRET):
+            if not bylaw.verify_webhook(request.data, request.headers["X-Ledgix-Signature"], SECRET):
                 return "Forbidden", 403
             event = request.get_json()
             ...

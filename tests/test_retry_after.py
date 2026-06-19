@@ -1,4 +1,4 @@
-# Ledgix ALCV — Retry-After / 429 backpressure tests
+# Bylaw ALCV — Retry-After / 429 backpressure tests
 #
 # Vault's Scale & Reliability §2.1 work added proactive backpressure: when
 # the clearance queue is past its watermark, Vault emits 429 + Retry-After
@@ -21,14 +21,14 @@ import pytest
 import respx
 from httpx import Response
 
-from ledgix_python import LedgixClient, VaultConfig
-from ledgix_python.exceptions import QueueSaturatedError
-from ledgix_python.models import ClearanceRequest
+from bylaw_python import BylawClient, VaultConfig
+from bylaw_python.exceptions import QueueSaturatedError
+from bylaw_python.models import ClearanceRequest
 
 
-def _client_with_max_retries(max_retries: int = 0) -> LedgixClient:
+def _client_with_max_retries(max_retries: int = 0) -> BylawClient:
     """Build a client wired for fast tests: zero base delay, no JWT verify."""
-    return LedgixClient(
+    return BylawClient(
         config=VaultConfig(
             vault_url="https://vault.test",
             vault_api_key="test-api-key",

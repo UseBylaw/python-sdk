@@ -1,4 +1,4 @@
-# Ledgix ALCV — Manifest Layer
+# Bylaw ALCV — Manifest Layer
 # Schema, loading, and pattern matching for config-driven auto-instrumentation.
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-MANIFEST_FILENAMES = ("ledgix.yaml", "ledgix.yml", "ledgix.json")
+MANIFEST_FILENAMES = ("bylaw.yaml", "bylaw.yml", "bylaw.json")
 
 
 @dataclass(frozen=True)
@@ -61,11 +61,11 @@ def load_manifest(
     Supported file formats:
 
     * **YAML** (``.yaml`` / ``.yml``) — requires ``pyyaml`` (``pip install pyyaml``
-      or ``pip install 'ledgix-python[yaml]'``)
+      or ``pip install 'bylaw-python[yaml]'``)
     * **JSON** (``.json``) — no extra dependencies
 
     When *source* is ``None`` the function searches the current working
-    directory for ``ledgix.yaml``, ``ledgix.yml``, then ``ledgix.json`` in
+    directory for ``bylaw.yaml``, ``bylaw.yml``, then ``bylaw.json`` in
     that order.
 
     Manifest schema::
@@ -102,7 +102,7 @@ def load_manifest(
     else:
         path = Path(source)
         if not path.exists():
-            raise FileNotFoundError(f"Ledgix manifest not found: {path}")
+            raise FileNotFoundError(f"Bylaw manifest not found: {path}")
         data = _parse_file(path)
         src_label = str(path)
 
@@ -128,7 +128,7 @@ def _find_default_manifest() -> Path:
         if candidate.exists():
             return candidate
     raise FileNotFoundError(
-        "No Ledgix manifest found in the current directory. "
+        "No Bylaw manifest found in the current directory. "
         f"Create one of: {', '.join(MANIFEST_FILENAMES)}"
     )
 
@@ -141,7 +141,7 @@ def _parse_file(path: Path) -> dict[str, Any]:
             raise ImportError(
                 "PyYAML is required to load YAML manifests. "
                 "Install it with: pip install pyyaml  "
-                "or: pip install 'ledgix-python[yaml]'"
+                "or: pip install 'bylaw-python[yaml]'"
             ) from exc
         return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if path.suffix == ".json":

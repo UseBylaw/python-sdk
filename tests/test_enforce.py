@@ -1,4 +1,4 @@
-# Ledgix ALCV — Enforce Tests
+# Bylaw ALCV — Enforce Tests
 # Tests for the decorator and context manager
 
 from __future__ import annotations
@@ -7,9 +7,9 @@ import pytest
 import respx
 from httpx import Response
 
-from ledgix_python import LedgixClient, VaultConfig
-from ledgix_python.enforce import VaultContext, vault_enforce
-from ledgix_python.exceptions import ClearanceDeniedError
+from bylaw_python import BylawClient, VaultConfig
+from bylaw_python.enforce import VaultContext, vault_enforce
+from bylaw_python.exceptions import ClearanceDeniedError
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ class TestVaultEnforceSync:
     """Tests for @vault_enforce with sync functions."""
 
     @respx.mock
-    def test_approved_calls_function(self, client: LedgixClient, approved_response: dict):
+    def test_approved_calls_function(self, client: BylawClient, approved_response: dict):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
@@ -34,7 +34,7 @@ class TestVaultEnforceSync:
         assert result == 7
 
     @respx.mock
-    def test_denied_raises_error(self, client: LedgixClient, denied_response: dict):
+    def test_denied_raises_error(self, client: BylawClient, denied_response: dict):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=denied_response)
         )
@@ -47,7 +47,7 @@ class TestVaultEnforceSync:
             my_tool(42)
 
     @respx.mock
-    def test_clearance_injected(self, client: LedgixClient, approved_response: dict):
+    def test_clearance_injected(self, client: BylawClient, approved_response: dict):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
@@ -61,7 +61,7 @@ class TestVaultEnforceSync:
         assert result is not None  # The A-JWT token
 
     @respx.mock
-    def test_uses_function_name_as_default(self, client: LedgixClient, approved_response: dict):
+    def test_uses_function_name_as_default(self, client: BylawClient, approved_response: dict):
         route = respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
@@ -77,7 +77,7 @@ class TestVaultEnforceSync:
         assert body["tool_name"] == "stripe_refund"
 
     @respx.mock
-    def test_extracts_tool_args(self, client: LedgixClient, approved_response: dict):
+    def test_extracts_tool_args(self, client: BylawClient, approved_response: dict):
         route = respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
@@ -94,7 +94,7 @@ class TestVaultEnforceSync:
         assert body["tool_args"]["reason"] == "late delivery"
 
     @respx.mock
-    def test_with_policy_id(self, client: LedgixClient, approved_response: dict):
+    def test_with_policy_id(self, client: BylawClient, approved_response: dict):
         route = respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
@@ -120,7 +120,7 @@ class TestVaultEnforceAsync:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_approved_async(self, client: LedgixClient, approved_response: dict):
+    async def test_approved_async(self, client: BylawClient, approved_response: dict):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
@@ -134,7 +134,7 @@ class TestVaultEnforceAsync:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_denied_async(self, client: LedgixClient, denied_response: dict):
+    async def test_denied_async(self, client: BylawClient, denied_response: dict):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=denied_response)
         )
@@ -156,7 +156,7 @@ class TestVaultContext:
     """Tests for VaultContext (sync + async context manager)."""
 
     @respx.mock
-    def test_sync_context_approved(self, client: LedgixClient, approved_response: dict):
+    def test_sync_context_approved(self, client: BylawClient, approved_response: dict):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
@@ -167,7 +167,7 @@ class TestVaultContext:
             assert ctx.clearance.token is not None
 
     @respx.mock
-    def test_sync_context_denied(self, client: LedgixClient, denied_response: dict):
+    def test_sync_context_denied(self, client: BylawClient, denied_response: dict):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=denied_response)
         )
@@ -178,7 +178,7 @@ class TestVaultContext:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_async_context_approved(self, client: LedgixClient, approved_response: dict):
+    async def test_async_context_approved(self, client: BylawClient, approved_response: dict):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
@@ -189,7 +189,7 @@ class TestVaultContext:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_async_context_denied(self, client: LedgixClient, denied_response: dict):
+    async def test_async_context_denied(self, client: BylawClient, denied_response: dict):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=denied_response)
         )
@@ -199,7 +199,7 @@ class TestVaultContext:
                 pass
 
     @respx.mock
-    def test_context_with_policy_id(self, client: LedgixClient, approved_response: dict):
+    def test_context_with_policy_id(self, client: BylawClient, approved_response: dict):
         route = respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )

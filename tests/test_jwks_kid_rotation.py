@@ -11,8 +11,8 @@ import respx
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from httpx import Response
 
-from ledgix_python import LedgixClient, VaultConfig
-from ledgix_python.exceptions import TokenVerificationError
+from bylaw_python import BylawClient, VaultConfig
+from bylaw_python.exceptions import TokenVerificationError
 
 
 def make_jwks(private_key: Ed25519PrivateKey, kid: str) -> dict:
@@ -57,7 +57,7 @@ def test_verify_token_with_kid_matching(config: VaultConfig) -> None:
 
     with respx.mock(base_url="https://vault.test") as mock:
         mock.get("/.well-known/jwks.json").mock(return_value=Response(200, json=jwks))
-        client = LedgixClient(config=config)
+        client = BylawClient(config=config)
         decoded = client.verify_token(token)
         assert decoded["sub"] == "clearance"
 
@@ -80,7 +80,7 @@ def test_verify_refetches_jwks_on_kid_miss(config: VaultConfig) -> None:
 
     with respx.mock(base_url="https://vault.test") as mock:
         mock.get("/.well-known/jwks.json").mock(side_effect=jwks_handler)
-        client = LedgixClient(config=config)
+        client = BylawClient(config=config)
         # Manually pre-populate cache with old JWKS to simulate a cached state.
         client.fetch_jwks()  # fetch_count=1: old JWKS, only k1
         assert fetch_count == 1
@@ -101,7 +101,7 @@ def test_verify_unknown_kid_after_refetch_raises(config: VaultConfig) -> None:
     with respx.mock(base_url="https://vault.test") as mock:
         # Always return old JWKS — k2 never appears.
         mock.get("/.well-known/jwks.json").mock(return_value=Response(200, json=old_jwks))
-        client = LedgixClient(config=config)
+        client = BylawClient(config=config)
         client.fetch_jwks()
 
         with pytest.raises(TokenVerificationError, match="k2"):

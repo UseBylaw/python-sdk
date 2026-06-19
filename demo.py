@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Ledgix ALCV SDK — Demo Script
+"""Bylaw ALCV SDK — Demo Script
 
 Simulates the "Good Agent" vs "Rogue Agent" scenario from the
 ALCV Vault technical specification.
 
 This demo runs without a real Vault server by using a lightweight
-mock. Set LEDGIX_VAULT_URL to point to a real Vault to test live.
+mock. Set BYLAW_VAULT_URL to point to a real Vault to test live.
 
 Usage:
     python demo.py
@@ -21,9 +21,9 @@ from datetime import datetime, timedelta, timezone
 import jwt
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from ledgix_python import (
+from bylaw_python import (
     ClearanceDeniedError,
-    LedgixClient,
+    BylawClient,
     VaultConfig,
     vault_enforce,
 )
@@ -112,7 +112,7 @@ def run_demo():
     """Run the Good Agent / Rogue Agent demo."""
 
     print("=" * 64)
-    print("  LEDGIX ALCV — SDK Demo")
+    print("  BYLAW ALCV — SDK Demo")
     print("  Policy: \"Refunds ≤ $100 for shipping delays only\"")
     print("=" * 64)
 
@@ -123,7 +123,7 @@ def run_demo():
         verify_jwt=False,
         agent_id="demo-agent",
     )
-    client = LedgixClient(config=config)
+    client = BylawClient(config=config)
 
     # ── Scenario A: Good Agent ─────────────────────────────────────
     print("\n" + "─" * 64)
@@ -144,7 +144,7 @@ def run_demo():
 
     if decision["approved"]:
         # Simulate what the decorator would do
-        from ledgix_python.models import ClearanceResponse
+        from bylaw_python.models import ClearanceResponse
 
         clearance = ClearanceResponse(**decision)
         result = stripe_refund(**tool_args_good, _clearance=clearance)

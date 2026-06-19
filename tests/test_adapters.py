@@ -1,4 +1,4 @@
-# Ledgix ALCV — Adapter Tests
+# Bylaw ALCV — Adapter Tests
 # Tests for LangChain, LlamaIndex, and CrewAI adapters
 # These tests mock the framework imports to avoid needing the actual packages
 
@@ -13,8 +13,8 @@ import pytest
 import respx
 from httpx import Response
 
-from ledgix_python import LedgixClient
-from ledgix_python.exceptions import ClearanceDeniedError
+from bylaw_python import BylawClient
+from bylaw_python.exceptions import ClearanceDeniedError
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -63,22 +63,22 @@ def mock_langchain():
     for mod in ["langchain_core", "langchain_core.callbacks", "langchain_core.tools"]:
         sys.modules.pop(mod, None)
     # Clear cached import in the adapter module
-    if "ledgix_python.adapters.langchain" in sys.modules:
-        del sys.modules["ledgix_python.adapters.langchain"]
+    if "bylaw_python.adapters.langchain" in sys.modules:
+        del sys.modules["bylaw_python.adapters.langchain"]
 
 
 class TestLangChainCallbackHandler:
     @respx.mock
     def test_on_tool_start_approved(
-        self, mock_langchain, client: LedgixClient, approved_response: dict
+        self, mock_langchain, client: BylawClient, approved_response: dict
     ):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
 
-        from ledgix_python.adapters.langchain import LedgixCallbackHandler
+        from bylaw_python.adapters.langchain import BylawCallbackHandler
 
-        handler = LedgixCallbackHandler(client)
+        handler = BylawCallbackHandler(client)
         # Should not raise
         handler.on_tool_start(
             serialized={"name": "test_tool"},
@@ -87,15 +87,15 @@ class TestLangChainCallbackHandler:
 
     @respx.mock
     def test_on_tool_start_denied(
-        self, mock_langchain, client: LedgixClient, denied_response: dict
+        self, mock_langchain, client: BylawClient, denied_response: dict
     ):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=denied_response)
         )
 
-        from ledgix_python.adapters.langchain import LedgixCallbackHandler
+        from bylaw_python.adapters.langchain import BylawCallbackHandler
 
-        handler = LedgixCallbackHandler(client, policy_id="test-policy")
+        handler = BylawCallbackHandler(client, policy_id="test-policy")
 
         with pytest.raises(ClearanceDeniedError):
             handler.on_tool_start(
@@ -106,21 +106,21 @@ class TestLangChainCallbackHandler:
 
 class TestLangChainToolWrapper:
     @respx.mock
-    def test_wrap_tool(self, mock_langchain, client: LedgixClient, approved_response: dict):
+    def test_wrap_tool(self, mock_langchain, client: BylawClient, approved_response: dict):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
 
         MockBaseTool = mock_langchain
 
-        from ledgix_python.adapters.langchain import LedgixTool
+        from bylaw_python.adapters.langchain import BylawTool
 
         inner = MockBaseTool()
         inner.name = "search"
         inner.description = "Search tool"
-        wrapped = LedgixTool.wrap(client, inner, policy_id="search-policy")
+        wrapped = BylawTool.wrap(client, inner, policy_id="search-policy")
 
-        assert wrapped.name == "ledgix_search"
+        assert wrapped.name == "bylaw_search"
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -169,19 +169,19 @@ def mock_llamaindex():
 
     for mod in ["llama_index", "llama_index.core", "llama_index.core.tools"]:
         sys.modules.pop(mod, None)
-    if "ledgix_python.adapters.llamaindex" in sys.modules:
-        del sys.modules["ledgix_python.adapters.llamaindex"]
+    if "bylaw_python.adapters.llamaindex" in sys.modules:
+        del sys.modules["bylaw_python.adapters.llamaindex"]
 
 
 class TestLlamaIndexAdapter:
     @respx.mock
-    def test_wrap_tool(self, mock_llamaindex, client: LedgixClient, approved_response: dict):
+    def test_wrap_tool(self, mock_llamaindex, client: BylawClient, approved_response: dict):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
 
         MockFunctionTool = mock_llamaindex
-        from ledgix_python.adapters.llamaindex import wrap_tool
+        from bylaw_python.adapters.llamaindex import wrap_tool
 
         def my_search(query: str) -> str:
             return f"results for {query}"
@@ -189,7 +189,7 @@ class TestLlamaIndexAdapter:
         original = MockFunctionTool(fn=my_search, name="search", description="A search tool")
         guarded = wrap_tool(client, original, policy_id="search-policy")
 
-        assert guarded.metadata.name == "ledgix_search"
+        assert guarded.metadata.name == "bylaw_search"
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -223,38 +223,38 @@ def mock_crewai():
 
     for mod in ["crewai", "crewai.tools"]:
         sys.modules.pop(mod, None)
-    if "ledgix_python.adapters.crewai" in sys.modules:
-        del sys.modules["ledgix_python.adapters.crewai"]
+    if "bylaw_python.adapters.crewai" in sys.modules:
+        del sys.modules["bylaw_python.adapters.crewai"]
 
 
 class TestCrewAIAdapter:
     @respx.mock
-    def test_wrap_tool(self, mock_crewai, client: LedgixClient, approved_response: dict):
+    def test_wrap_tool(self, mock_crewai, client: BylawClient, approved_response: dict):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
 
         MockBaseTool = mock_crewai
-        from ledgix_python.adapters.crewai import LedgixCrewAITool
+        from bylaw_python.adapters.crewai import BylawCrewAITool
 
         inner = MockBaseTool(name="search", description="Search tool")
-        wrapped = LedgixCrewAITool.wrap(client, inner, policy_id="p1")
+        wrapped = BylawCrewAITool.wrap(client, inner, policy_id="p1")
 
-        assert wrapped.name == "ledgix_search"
+        assert wrapped.name == "bylaw_search"
 
     @respx.mock
     def test_denied_returns_blocked_message(
-        self, mock_crewai, client: LedgixClient, denied_response: dict
+        self, mock_crewai, client: BylawClient, denied_response: dict
     ):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=denied_response)
         )
 
         MockBaseTool = mock_crewai
-        from ledgix_python.adapters.crewai import LedgixCrewAITool
+        from bylaw_python.adapters.crewai import BylawCrewAITool
 
         inner = MockBaseTool(name="refund", description="Refund tool")
-        wrapped = LedgixCrewAITool.wrap(client, inner)
+        wrapped = BylawCrewAITool.wrap(client, inner)
 
         result = wrapped._run(amount=5000)
         assert "BLOCKED" in result

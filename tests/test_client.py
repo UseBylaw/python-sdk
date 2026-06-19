@@ -1,4 +1,4 @@
-# Ledgix ALCV — Client Tests
+# Bylaw ALCV — Client Tests
 
 from __future__ import annotations
 
@@ -12,14 +12,14 @@ import pytest
 import respx
 from httpx import Response
 
-from ledgix_python import LedgixClient, VaultConfig
-from ledgix_python.exceptions import (
+from bylaw_python import BylawClient, VaultConfig
+from bylaw_python.exceptions import (
     ClearanceDeniedError,
     PolicyRegistrationError,
     TokenVerificationError,
     VaultConnectionError,
 )
-from ledgix_python.models import ClearanceRequest, PolicyRegistration
+from bylaw_python.models import ClearanceRequest, PolicyRegistration
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -28,10 +28,10 @@ from ledgix_python.models import ClearanceRequest, PolicyRegistration
 
 
 class TestRequestClearance:
-    """Tests for LedgixClient.request_clearance (sync)."""
+    """Tests for BylawClient.request_clearance (sync)."""
 
     @respx.mock
-    def test_approved(self, client: LedgixClient, approved_response: dict):
+    def test_approved(self, client: BylawClient, approved_response: dict):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
@@ -44,7 +44,7 @@ class TestRequestClearance:
         assert result.request_id == "req-001"
 
     @respx.mock
-    def test_denied_raises_error(self, client: LedgixClient, denied_response: dict):
+    def test_denied_raises_error(self, client: BylawClient, denied_response: dict):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=denied_response)
         )
@@ -58,7 +58,7 @@ class TestRequestClearance:
         assert exc_info.value.request_id == "req-002"
 
     @respx.mock
-    def test_connection_error(self, client: LedgixClient):
+    def test_connection_error(self, client: BylawClient):
         respx.post("https://vault.test/request-clearance").mock(
             side_effect=httpx.ConnectError("Connection refused")
         )
@@ -69,7 +69,7 @@ class TestRequestClearance:
             client.request_clearance(request)
 
     @respx.mock
-    def test_http_error(self, client: LedgixClient):
+    def test_http_error(self, client: BylawClient):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(500, text="Internal Server Error")
         )
@@ -80,7 +80,7 @@ class TestRequestClearance:
             client.request_clearance(request)
 
     @respx.mock
-    def test_sends_correct_headers(self, client: LedgixClient, approved_response: dict):
+    def test_sends_correct_headers(self, client: BylawClient, approved_response: dict):
         route = respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
@@ -94,7 +94,7 @@ class TestRequestClearance:
         assert sent_request.headers["Content-Type"] == "application/json"
 
     @respx.mock
-    def test_sends_correct_payload(self, client: LedgixClient, approved_response: dict):
+    def test_sends_correct_payload(self, client: BylawClient, approved_response: dict):
         route = respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
@@ -113,7 +113,7 @@ class TestRequestClearance:
         assert body["agent_id"] == "my-agent"
 
     @respx.mock
-    def test_processing_polls_until_approved(self, client: LedgixClient, approved_response: dict):
+    def test_processing_polls_until_approved(self, client: BylawClient, approved_response: dict):
         processing_response = {
             "status": "processing",
             "decision_status": "denied",
@@ -143,11 +143,11 @@ class TestRequestClearance:
 
 
 class TestAsyncRequestClearance:
-    """Tests for LedgixClient.arequest_clearance (async)."""
+    """Tests for BylawClient.arequest_clearance (async)."""
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_approved_async(self, client: LedgixClient, approved_response: dict):
+    async def test_approved_async(self, client: BylawClient, approved_response: dict):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
@@ -160,7 +160,7 @@ class TestAsyncRequestClearance:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_denied_async(self, client: LedgixClient, denied_response: dict):
+    async def test_denied_async(self, client: BylawClient, denied_response: dict):
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=denied_response)
         )
@@ -172,7 +172,7 @@ class TestAsyncRequestClearance:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_connection_error_async(self, client: LedgixClient):
+    async def test_connection_error_async(self, client: BylawClient):
         respx.post("https://vault.test/request-clearance").mock(
             side_effect=httpx.ConnectError("Connection refused")
         )
@@ -192,7 +192,7 @@ class TestPolicyRegistration:
     """Tests for policy registration (sync + async)."""
 
     @respx.mock
-    def test_register_policy_sync(self, client: LedgixClient, policy_response: dict):
+    def test_register_policy_sync(self, client: BylawClient, policy_response: dict):
         respx.post("https://vault.test/register-policy").mock(
             return_value=Response(200, json=policy_response)
         )
@@ -209,7 +209,7 @@ class TestPolicyRegistration:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_register_policy_async(self, client: LedgixClient, policy_response: dict):
+    async def test_register_policy_async(self, client: BylawClient, policy_response: dict):
         respx.post("https://vault.test/register-policy").mock(
             return_value=Response(200, json=policy_response)
         )
@@ -224,7 +224,7 @@ class TestPolicyRegistration:
         assert result.policy_id == "refund-policy"
 
     @respx.mock
-    def test_register_policy_error(self, client: LedgixClient):
+    def test_register_policy_error(self, client: BylawClient):
         respx.post("https://vault.test/register-policy").mock(
             return_value=Response(400, text="Bad Request")
         )
@@ -244,7 +244,7 @@ class TestTokenVerification:
     """Tests for JWKS fetching and A-JWT verification."""
 
     @respx.mock
-    def test_fetch_jwks(self, client: LedgixClient, jwks_response: dict):
+    def test_fetch_jwks(self, client: BylawClient, jwks_response: dict):
         respx.get("https://vault.test/.well-known/jwks.json").mock(
             return_value=Response(200, json=jwks_response)
         )
@@ -255,7 +255,7 @@ class TestTokenVerification:
 
     @respx.mock
     def test_verify_valid_token(
-        self, client: LedgixClient, sample_jwt: str, jwks_response: dict
+        self, client: BylawClient, sample_jwt: str, jwks_response: dict
     ):
         respx.get("https://vault.test/.well-known/jwks.json").mock(
             return_value=Response(200, json=jwks_response)
@@ -267,7 +267,7 @@ class TestTokenVerification:
 
     @respx.mock
     def test_verify_expired_token(
-        self, client: LedgixClient, expired_jwt: str, jwks_response: dict
+        self, client: BylawClient, expired_jwt: str, jwks_response: dict
     ):
         respx.get("https://vault.test/.well-known/jwks.json").mock(
             return_value=Response(200, json=jwks_response)
@@ -277,7 +277,7 @@ class TestTokenVerification:
             client.verify_token(expired_jwt)
 
     @respx.mock
-    def test_verify_invalid_token(self, client: LedgixClient, jwks_response: dict):
+    def test_verify_invalid_token(self, client: BylawClient, jwks_response: dict):
         respx.get("https://vault.test/.well-known/jwks.json").mock(
             return_value=Response(200, json=jwks_response)
         )
@@ -286,7 +286,7 @@ class TestTokenVerification:
             client.verify_token("not.a.valid.token")
 
     @respx.mock
-    def test_jwks_empty_keys(self, client: LedgixClient):
+    def test_jwks_empty_keys(self, client: BylawClient):
         respx.get("https://vault.test/.well-known/jwks.json").mock(
             return_value=Response(200, json={"keys": []})
         )
@@ -296,7 +296,7 @@ class TestTokenVerification:
 
     @respx.mock
     def test_clearance_with_jwt_verification(
-        self, client_with_jwt: LedgixClient, approved_response: dict, jwks_response: dict
+        self, client_with_jwt: BylawClient, approved_response: dict, jwks_response: dict
     ):
         """When verify_jwt=True, clearance should also verify the returned token."""
         respx.post("https://vault.test/request-clearance").mock(
@@ -438,7 +438,7 @@ class TestLedgerProofVerification:
         return cls._sha256_hex(b"ledgix.audit.checkpoint.v1\x00", payload)
 
     @respx.mock
-    def test_fetch_ledger_and_manifests(self, client: LedgixClient):
+    def test_fetch_ledger_and_manifests(self, client: BylawClient):
         respx.get("https://vault.test/ledger?limit=2").mock(
             return_value=Response(
                 200,
@@ -510,7 +510,7 @@ class TestLedgerProofVerification:
     @respx.mock
     def test_verify_ledger_proof(
         self,
-        client: LedgixClient,
+        client: BylawClient,
         ed25519_private_key,
         jwks_response: dict,
     ):
@@ -586,7 +586,7 @@ class TestLedgerProofVerification:
     @respx.mock
     def test_verify_ledger_proof_with_redacted_public_entry(
         self,
-        client: LedgixClient,
+        client: BylawClient,
         ed25519_private_key,
         jwks_response: dict,
     ):
@@ -667,7 +667,7 @@ class TestLedgerProofVerification:
 
     def test_verify_ledger_proof_bundle_with_later_checkpoint(
         self,
-        client: LedgixClient,
+        client: BylawClient,
         ed25519_private_key,
         jwks_response: dict,
     ):
@@ -761,7 +761,7 @@ class TestLedgerProofVerification:
     @pytest.mark.asyncio
     async def test_verify_ledger_proof_async(
         self,
-        client: LedgixClient,
+        client: BylawClient,
         ed25519_private_key,
         jwks_response: dict,
     ):
@@ -850,7 +850,7 @@ class TestRetry:
     def test_retries_on_connection_error_then_succeeds(
         self, vault_config_retry: VaultConfig, approved_response: dict
     ):
-        client = LedgixClient(config=vault_config_retry)
+        client = BylawClient(config=vault_config_retry)
         route = respx.post("https://vault.test/request-clearance").mock(
             side_effect=[
                 httpx.ConnectError("Connection refused"),
@@ -870,7 +870,7 @@ class TestRetry:
     def test_retries_on_5xx_then_succeeds(
         self, vault_config_retry: VaultConfig, approved_response: dict
     ):
-        client = LedgixClient(config=vault_config_retry)
+        client = BylawClient(config=vault_config_retry)
         respx.post("https://vault.test/request-clearance").mock(
             side_effect=[
                 Response(503, text="Service Unavailable"),
@@ -887,7 +887,7 @@ class TestRetry:
 
     @respx.mock
     def test_raises_after_exhausting_retries(self, vault_config_retry: VaultConfig):
-        client = LedgixClient(config=vault_config_retry)
+        client = BylawClient(config=vault_config_retry)
         respx.post("https://vault.test/request-clearance").mock(
             side_effect=httpx.ConnectError("Connection refused")
         )
@@ -899,7 +899,7 @@ class TestRetry:
 
     @respx.mock
     def test_does_not_retry_on_4xx(self, vault_config_retry: VaultConfig):
-        client = LedgixClient(config=vault_config_retry)
+        client = BylawClient(config=vault_config_retry)
         route = respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(400, text="Bad Request")
         )
@@ -917,7 +917,7 @@ class TestRetry:
     async def test_async_retries_on_connection_error(
         self, vault_config_retry: VaultConfig, approved_response: dict
     ):
-        client = LedgixClient(config=vault_config_retry)
+        client = BylawClient(config=vault_config_retry)
         respx.post("https://vault.test/request-clearance").mock(
             side_effect=[
                 httpx.ConnectError("Connection refused"),
@@ -936,16 +936,16 @@ class TestClientLifecycle:
     """Tests for context manager and close behavior."""
 
     def test_sync_context_manager(self, vault_config: VaultConfig):
-        with LedgixClient(config=vault_config) as client:
+        with BylawClient(config=vault_config) as client:
             assert client.config.vault_url == "https://vault.test"
 
     @pytest.mark.asyncio
     async def test_async_context_manager(self, vault_config: VaultConfig):
-        async with LedgixClient(config=vault_config) as client:
+        async with BylawClient(config=vault_config) as client:
             assert client.config.vault_url == "https://vault.test"
 
     def test_default_config(self):
         """Client should work with defaults (reads env)."""
-        client = LedgixClient()
+        client = BylawClient()
         assert client.config.vault_url == "http://localhost:8000"
         client.close()

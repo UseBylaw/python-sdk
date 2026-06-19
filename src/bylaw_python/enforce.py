@@ -1,4 +1,4 @@
-# Ledgix ALCV — Enforcement Layer
+# Bylaw ALCV — Enforcement Layer
 # Decorator and context manager for intercepting tool calls
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import types
 from pathlib import Path
 from typing import Any, Callable, TypeVar
 
-from .client import LedgixClient
+from .client import BylawClient
 from .config import VaultConfig
 from .exceptions import ClearanceDeniedError, ReviewPendingError
 from .manifest import Manifest, ManifestRule, load_manifest
@@ -27,53 +27,53 @@ F = TypeVar("F", bound=Callable[..., Any])
 # Global singleton & context variable
 # ---------------------------------------------------------------------------
 
-_default_client: LedgixClient | None = None
+_default_client: BylawClient | None = None
 _current_clearance: contextvars.ContextVar[ClearanceResponse | None] = contextvars.ContextVar(
-    "_ledgix_clearance", default=None
+    "_bylaw_clearance", default=None
 )
 _manifest: Manifest | None = None
 
 
-def configure(config: VaultConfig | None = None, **kwargs: Any) -> LedgixClient:
-    """Configure the global Ledgix client.
+def configure(config: VaultConfig | None = None, **kwargs: Any) -> BylawClient:
+    """Configure the global Bylaw client.
 
     Call this once at application startup.  All subsequent calls to
     :func:`enforce` will use this client automatically.
 
-    Keyword arguments are forwarded to :class:`~ledgix_python.VaultConfig`
+    Keyword arguments are forwarded to :class:`~bylaw_python.VaultConfig`
     when no explicit *config* object is provided::
 
-        import ledgix_python as ledgix
+        import bylaw_python as bylaw
 
-        ledgix.configure(agent_id="finance-agent")
+        bylaw.configure(agent_id="finance-agent")
 
     Args:
-        config: Optional pre-built :class:`~ledgix_python.VaultConfig`.
+        config: Optional pre-built :class:`~bylaw_python.VaultConfig`.
         **kwargs: Config overrides passed to ``VaultConfig`` when *config* is
             ``None``.
 
     Returns:
-        The newly created :class:`~ledgix_python.LedgixClient`.
+        The newly created :class:`~bylaw_python.BylawClient`.
     """
     global _default_client
     if config is None:
         config = VaultConfig(**kwargs)
-    _default_client = LedgixClient(config)
+    _default_client = BylawClient(config)
     return _default_client
 
 
-def _get_default_client() -> LedgixClient:
+def _get_default_client() -> BylawClient:
     """Return the global client, raising if :func:`configure` was never called."""
     if _default_client is None:
         raise RuntimeError(
-            "No Ledgix client configured. Call ledgix.configure() at startup "
-            "before using @ledgix.enforce()."
+            "No Bylaw client configured. Call bylaw.configure() at startup "
+            "before using @bylaw.enforce()."
         )
     return _default_client
 
 
 def current_clearance() -> ClearanceResponse | None:
-    """Return the :class:`~ledgix_python.ClearanceResponse` for the current call.
+    """Return the :class:`~bylaw_python.ClearanceResponse` for the current call.
 
     Returns ``None`` when called outside an :func:`enforce`-wrapped function.
     """
@@ -106,15 +106,15 @@ def auto_instrument(
     Call once at startup after :func:`configure`::
 
         import tools
-        import ledgix_python as ledgix
+        import bylaw_python as bylaw
 
-        ledgix.configure(agent_id="my-agent")
-        ledgix.auto_instrument(tools)          # reads ledgix.yaml from CWD
+        bylaw.configure(agent_id="my-agent")
+        bylaw.auto_instrument(tools)          # reads bylaw.yaml from CWD
 
     Or point at a specific manifest::
 
-        ledgix.auto_instrument(tools, manifest="config/ledgix.yaml")
-        ledgix.auto_instrument(tools, manifest={"enforce": [
+        bylaw.auto_instrument(tools, manifest="config/bylaw.yaml")
+        bylaw.auto_instrument(tools, manifest={"enforce": [
             {"tool": "stripe_*", "policy_id": "financial-high-risk"},
         ]})
 
@@ -130,8 +130,8 @@ def auto_instrument(
     Args:
         module: Module or package (when *recurse* is ``True``) to scan.
         manifest: Path to a manifest file, an inline ``dict``, a pre-built
-            :class:`~ledgix_python.Manifest`, or ``None`` to auto-discover
-            ``ledgix.yaml`` / ``ledgix.yml`` / ``ledgix.json`` in the CWD.
+            :class:`~bylaw_python.Manifest`, or ``None`` to auto-discover
+            ``bylaw.yaml`` / ``bylaw.yml`` / ``bylaw.json`` in the CWD.
         recurse: If ``True``, also scan sub-packages of any package module.
 
     Returns:
@@ -212,14 +212,14 @@ def tool(
 
     Works with or without call parentheses::
 
-        @ledgix.tool
+        @bylaw.tool
         def my_fn(amount: float):
-            token = ledgix.current_token()
+            token = bylaw.current_token()
             ...
 
-        @ledgix.tool(policy_id="financial-high-risk")
+        @bylaw.tool(policy_id="financial-high-risk")
         def stripe_charge(amount: float, customer_id: str):
-            token = ledgix.current_token()
+            token = bylaw.current_token()
             ...
 
     Args:
@@ -259,9 +259,9 @@ def tool(
         )(f)
 
     if func is not None:
-        # @ledgix.tool  — called without parentheses
+        # @bylaw.tool  — called without parentheses
         return decorator(func)
-    # @ledgix.tool(...)  — called with arguments
+    # @bylaw.tool(...)  — called with arguments
     return decorator
 
 
@@ -288,13 +288,13 @@ def enforce(
     token is stored in a context variable and can be retrieved inside the
     decorated function via :func:`current_token`::
 
-        import ledgix_python as ledgix
+        import bylaw_python as bylaw
 
-        ledgix.configure(agent_id="finance-agent")
+        bylaw.configure(agent_id="finance-agent")
 
-        @ledgix.enforce(tool_name="stripe_refund")
+        @bylaw.enforce(tool_name="stripe_refund")
         def process_refund(amount: float, reason: str):
-            token = ledgix.current_token()
+            token = bylaw.current_token()
             stripe.refund(amount=amount, metadata={"vault_token": token})
 
     Works with both sync and async functions.  Unlike :func:`vault_enforce`,
@@ -303,8 +303,8 @@ def enforce(
     Args:
         on_review_pending: Optional callback invoked when ``review_mode="detach"``
             and the Vault returns a ``pending_review`` response.  Receives a
-            :class:`~ledgix_python.PendingApproval` handle.  After the callback
-            returns, :class:`~ledgix_python.ReviewPendingError` is re-raised so
+            :class:`~bylaw_python.PendingApproval` handle.  After the callback
+            returns, :class:`~bylaw_python.ReviewPendingError` is re-raised so
             the calling framework can abort the current turn.
     """
 
@@ -395,7 +395,7 @@ class VaultContext:
 
     def __init__(
         self,
-        client: LedgixClient,
+        client: BylawClient,
         tool_name: str,
         tool_args: dict[str, Any] | None = None,
         *,
@@ -453,7 +453,7 @@ class VaultContext:
 
 
 def vault_enforce(
-    client: LedgixClient,
+    client: BylawClient,
     *,
     tool_name: str | None = None,
     policy_id: str | None = None,

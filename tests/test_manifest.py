@@ -1,4 +1,4 @@
-# Ledgix ALCV — Manifest and Auto-Instrumentation Tests
+# Bylaw ALCV — Manifest and Auto-Instrumentation Tests
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ import pytest
 import respx
 from httpx import Response
 
-import ledgix_python as ledgix
-from ledgix_python.manifest import load_manifest
+import bylaw_python as bylaw
+from bylaw_python.manifest import load_manifest
 
 
 def _make_module(name: str, source: str) -> types.ModuleType:
@@ -34,7 +34,7 @@ class TestManifestLoading:
         assert manifest.match("stripe_charge").policy_id == "financial-high-risk"
 
     def test_load_manifest_from_discovered_json(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-        path = tmp_path / "ledgix.json"
+        path = tmp_path / "bylaw.json"
         path.write_text(
             json.dumps({"enforce": [{"tool": "db_write*", "policy_id": "data-mutation"}]}),
             encoding="utf-8",
@@ -47,7 +47,7 @@ class TestManifestLoading:
         assert manifest.match("db_write_user").policy_id == "data-mutation"
 
     def test_load_manifest_from_yaml(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-        path = tmp_path / "ledgix.yaml"
+        path = tmp_path / "bylaw.yaml"
         path.write_text(
             "enforce:\n"
             "  - tool: \"stripe_*\"\n"
@@ -64,7 +64,7 @@ class TestManifestLoading:
     def test_missing_pyyaml_error_is_helpful(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ):
-        path = tmp_path / "ledgix.yaml"
+        path = tmp_path / "bylaw.yaml"
         path.write_text("enforce: []\n", encoding="utf-8")
 
         real_import = builtins.__import__
@@ -91,7 +91,7 @@ class TestAutoInstrument:
         route = respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
-        ledgix.configure(vault_config)
+        bylaw.configure(vault_config)
 
         external_module = _make_module(
             "external_tools",
@@ -100,16 +100,16 @@ class TestAutoInstrument:
         )
         tools_module = _make_module(
             "test_tools_module",
-            "import ledgix_python as ledgix\n"
+            "import bylaw_python as bylaw\n"
             "def stripe_charge(amount):\n"
-            "    return ledgix.current_token()\n"
+            "    return bylaw.current_token()\n"
             "def _hidden_tool():\n"
             "    return 'hidden'\n",
         )
         tools_module.imported_fn = external_module.imported_fn
         original_imported = tools_module.imported_fn
 
-        wrapped = ledgix.auto_instrument(
+        wrapped = bylaw.auto_instrument(
             tools_module,
             manifest={"enforce": [{"tool": "stripe_*", "policy_id": "financial-high-risk"}]},
         )
@@ -134,9 +134,9 @@ class TestAutoInstrument:
         package_dir.mkdir()
         (package_dir / "__init__.py").write_text("", encoding="utf-8")
         (package_dir / "tools.py").write_text(
-            "import ledgix_python as ledgix\n"
+            "import bylaw_python as bylaw\n"
             "def stripe_refund(amount):\n"
-            "    return ledgix.current_token()\n",
+            "    return bylaw.current_token()\n",
             encoding="utf-8",
         )
         monkeypatch.syspath_prepend(str(tmp_path))
@@ -147,9 +147,9 @@ class TestAutoInstrument:
         respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
-        ledgix.configure(vault_config)
+        bylaw.configure(vault_config)
 
-        wrapped = ledgix.auto_instrument(
+        wrapped = bylaw.auto_instrument(
             package,
             manifest={"enforce": [{"tool": "stripe_*", "policy_id": "financial-high-risk"}]},
             recurse=True,
@@ -169,16 +169,16 @@ class TestToolDecorator:
         route = respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
-        ledgix.configure(vault_config)
+        bylaw.configure(vault_config)
         module = _make_module("empty_tools_module", "")
-        ledgix.auto_instrument(
+        bylaw.auto_instrument(
             module,
             manifest={"enforce": [{"tool": "special_*", "policy_id": "manifest-policy"}]},
         )
 
-        @ledgix.tool
+        @bylaw.tool
         def special_refund():
-            return ledgix.current_token()
+            return bylaw.current_token()
 
         assert special_refund() == approved_response["token"]
         body = json.loads(route.calls[0].request.content)
@@ -193,9 +193,9 @@ class TestToolDecorator:
         route = respx.post("https://vault.test/request-clearance").mock(
             return_value=Response(200, json=approved_response)
         )
-        ledgix.configure(vault_config)
+        bylaw.configure(vault_config)
         module = _make_module("override_tools_module", "")
-        ledgix.auto_instrument(
+        bylaw.auto_instrument(
             module,
             manifest={
                 "enforce": [
@@ -208,9 +208,9 @@ class TestToolDecorator:
             },
         )
 
-        @ledgix.tool(policy_id="override-policy", context={"source": "override"})
+        @bylaw.tool(policy_id="override-policy", context={"source": "override"})
         def special_charge():
-            return ledgix.current_token()
+            return bylaw.current_token()
 
         assert special_charge() == approved_response["token"]
         body = json.loads(route.calls[0].request.content)

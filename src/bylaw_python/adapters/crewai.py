@@ -1,4 +1,4 @@
-# Ledgix ALCV — CrewAI Adapter
+# Bylaw ALCV — CrewAI Adapter
 # Wraps CrewAI tools with Vault clearance enforcement
 
 from __future__ import annotations
@@ -7,7 +7,7 @@ from typing import Any, Type
 
 from pydantic import BaseModel
 
-from ..client import LedgixClient
+from ..client import BylawClient
 from ..exceptions import ClearanceDeniedError
 from ._core import build_clearance_request, resolve_client
 
@@ -16,29 +16,29 @@ try:
 except ImportError as exc:
     raise ImportError(
         "CrewAI adapter requires crewai. "
-        "Install with: pip install ledgix-python[crewai]"
+        "Install with: pip install bylaw-python[crewai]"
     ) from exc
 
 
-class LedgixCrewAITool(CrewAIBaseTool):
+class BylawCrewAITool(CrewAIBaseTool):
     """Wraps a CrewAI tool with Vault clearance enforcement.
 
     Usage with explicit client::
 
         from crewai.tools import BaseTool
-        from ledgix_python.adapters.crewai import LedgixCrewAITool
+        from bylaw_python.adapters.crewai import BylawCrewAITool
 
-        guarded = LedgixCrewAITool.wrap(client, MyTool())
+        guarded = BylawCrewAITool.wrap(client, MyTool())
 
-    Usage after :func:`ledgix_python.configure`::
+    Usage after :func:`bylaw_python.configure`::
 
-        guarded = LedgixCrewAITool.wrap(MyTool())
+        guarded = BylawCrewAITool.wrap(MyTool())
     """
 
     name: str = ""
     description: str = ""
     _inner_tool: CrewAIBaseTool
-    _client: LedgixClient | None
+    _client: BylawClient | None
     _policy_id: str | None
 
     class Config:
@@ -48,37 +48,37 @@ class LedgixCrewAITool(CrewAIBaseTool):
     def __init__(
         self,
         inner_tool: CrewAIBaseTool,
-        client: LedgixClient | None = None,
+        client: BylawClient | None = None,
         *,
         policy_id: str | None = None,
     ) -> None:
         super().__init__(
-            name=f"ledgix_{inner_tool.name}",
+            name=f"bylaw_{inner_tool.name}",
             description=inner_tool.description,
         )
         self._inner_tool = inner_tool
         self._client = client
         self._policy_id = policy_id
 
-    def _resolve_client(self) -> LedgixClient:
+    def _resolve_client(self) -> BylawClient:
         return resolve_client(self._client)
 
     @classmethod
     def wrap(
         cls,
-        client_or_tool: LedgixClient | CrewAIBaseTool,
+        client_or_tool: BylawClient | CrewAIBaseTool,
         tool: CrewAIBaseTool | None = None,
         *,
         policy_id: str | None = None,
-    ) -> LedgixCrewAITool:
+    ) -> BylawCrewAITool:
         """Convenience factory to wrap a CrewAI tool.
 
         Supports two call signatures:
 
-        - ``LedgixCrewAITool.wrap(client, tool, policy_id=...)`` — explicit client
-        - ``LedgixCrewAITool.wrap(tool, policy_id=...)`` — uses global client from :func:`ledgix_python.configure`
+        - ``BylawCrewAITool.wrap(client, tool, policy_id=...)`` — explicit client
+        - ``BylawCrewAITool.wrap(tool, policy_id=...)`` — uses global client from :func:`bylaw_python.configure`
         """
-        if isinstance(client_or_tool, LedgixClient):
+        if isinstance(client_or_tool, BylawClient):
             return cls(inner_tool=tool, client=client_or_tool, policy_id=policy_id)  # type: ignore[arg-type]
         return cls(inner_tool=client_or_tool, client=None, policy_id=policy_id)
 
