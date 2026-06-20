@@ -1,0 +1,57 @@
+# ledgix.yaml — the ONLY configuration for this sample.
+#
+# Five fake advisory tools are wired into Ledgix evidence enforcement purely by
+# this manifest. The agent never passes a fact ID by hand: source tools auto-
+# register evidence, the session store keeps the IDs, and the protected action +
+# customer-facing output are checked against that evidence before they run.
+#
+# Rules with an `evidence` block but no `policy_id` skip Vault *clearance* and run
+# only the evidence layer — so this sample needs no clearance policy, just the
+# default financial evidence contract that ships with Vault.
+
+enforce:
+  # 1. Stored profile — the authoritative source for date of birth + risk.
+  - tool: get_customer_profile
+    evidence:
+      kind: source
+      source_type: profile
+      customer_id: args.customer_id
+      fields:
+        date_of_birth: result.date_of_birth
+        risk_profile: result.risk_profile
+
+  # 2. Uploaded document — this + prior quarter balances (used to ground a growth %).
+  - tool: search_account_statement
+    evidence:
+      kind: source
+      source_type: uploaded_document
+      customer_id: args.customer_id
+      fields:
+        balance_now: result.balance_now
+        balance_prev: result.balance_prev
+
+  # 3. Calculation tool — sub-account balances (their sum grounds a stated total).
+  - tool: calculate_projection
+    evidence:
+      kind: source
+      source_type: tool_call
+      customer_id: args.customer_id
+      fields:
+        account_a: result.account_a
+        account_b: result.account_b
+
+  # 4. Protected action — gated by check-action; requires authoritative profile facts.
+  - tool: generate_recommendation
+    evidence:
+      kind: action
+      action_type: generate_share_recommendation
+      customer_id: args.customer_id
+      requires: [date_of_birth, risk_profile]
+
+  # 5. Customer-facing output — every financial number must be grounded in evidence.
+  - tool: send_advisor_response
+    evidence:
+      kind: output
+      action_type: send_financial_response
+      customer_id: args.customer_id
+      response_text: result.message
