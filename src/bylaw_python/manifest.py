@@ -36,6 +36,12 @@ class EvidenceRule:
     action_type: str | None = None
     requires: tuple[str, ...] = ()
 
+    def __post_init__(self) -> None:
+        kind = self.kind.strip().lower()
+        if kind not in {"source", "action"}:
+            raise ValueError("evidence kind must be one of: source, action")
+        object.__setattr__(self, "kind", kind)
+
 
 @dataclass(frozen=True)
 class ManifestRule:
@@ -147,7 +153,7 @@ def load_manifest(
 
 def _parse_evidence(raw: dict[str, Any] | None) -> EvidenceRule | None:
     """Parse an optional ``evidence`` block on an enforce entry."""
-    if not raw:
+    if raw is None:
         return None
     return EvidenceRule(
         kind=raw.get("kind", ""),

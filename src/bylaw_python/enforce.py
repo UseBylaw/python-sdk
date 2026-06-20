@@ -328,8 +328,9 @@ def enforce(
     def decorator(func: F) -> F:
         resolved_name = tool_name or func.__name__
         # Clearance runs for plain enforce()/clearance rules. An evidence-only
-        # rule (no policy_id) skips clearance and only runs the evidence layer.
-        do_clearance = evidence is None or policy_id is not None
+        # rule skips clearance unless policy context still requires it.
+        has_policy_context = policy_id is not None or bool((context or {}).get("policy_id"))
+        do_clearance = evidence is None or has_policy_context
         ev_action = evidence is not None and evidence.kind == "action"
         ev_source = evidence is not None and evidence.kind == "source"
 
@@ -366,12 +367,11 @@ def enforce(
                 if ev_action and evidence_on:
                     await aguard_action(client, evidence, tool_args)
 
-                token = _current_clearance.set(clearance) if clearance is not None else None
+                token = _current_clearance.set(clearance)
                 try:
                     result = await func(*args, **kwargs)
                 finally:
-                    if token is not None:
-                        _current_clearance.reset(token)
+                    _current_clearance.reset(token)
 
                 if ev_source and evidence_on:
                     try:
@@ -402,12 +402,11 @@ def enforce(
                 if ev_action and evidence_on:
                     guard_action(client, evidence, tool_args)
 
-                token = _current_clearance.set(clearance) if clearance is not None else None
+                token = _current_clearance.set(clearance)
                 try:
                     result = func(*args, **kwargs)
                 finally:
-                    if token is not None:
-                        _current_clearance.reset(token)
+                    _current_clearance.reset(token)
 
                 if ev_source and evidence_on:
                     try:

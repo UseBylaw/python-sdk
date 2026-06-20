@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -106,3 +107,11 @@ class VaultConfig(BaseSettings):
     """Backing store for the session evidence store. ``"memory"`` (V0 default).
     Redis/Postgres backends are a later add for multi-worker / hosted runs.
     Env: ``BYLAW_EVIDENCE_SESSION_BACKEND``."""
+
+    @field_validator("evidence_mode")
+    @classmethod
+    def _validate_evidence_mode(cls, value: str) -> str:
+        mode = value.strip().lower()
+        if mode not in {"off", "observe", "enforce"}:
+            raise ValueError("evidence_mode must be one of: off, observe, enforce")
+        return mode

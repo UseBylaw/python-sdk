@@ -94,6 +94,25 @@ def test_manifest_parses_evidence_block():
     assert m.rules[1].evidence.requires == ("dob",)
 
 
+def test_manifest_normalizes_and_validates_evidence_kind():
+    m = load_manifest({"enforce": [
+        {"tool": "get_*", "evidence": {"kind": "SOURCE", "fields": {"dob": "result.dob"}}},
+    ]})
+    assert m.rules[0].evidence.kind == "source"
+
+    with pytest.raises(ValueError, match="evidence kind"):
+        load_manifest({"enforce": [
+            {"tool": "get_*", "evidence": {"fields": {"dob": "result.dob"}}},
+        ]})
+
+
+def test_evidence_mode_is_normalized_and_validated():
+    assert _config("ENFORCE").evidence_mode == "enforce"
+
+    with pytest.raises(ValueError, match="evidence_mode"):
+        _config("enforced")
+
+
 # ---------------------------------------------------------------------------
 # Source observation + action guard (the core flow)
 # ---------------------------------------------------------------------------
@@ -161,6 +180,27 @@ def test_observe_mode_does_not_block_on_transport_failure():
 
 
 @respx.mock
+def test_context_policy_with_evidence_still_requests_clearance():
+    bylaw.configure(_config("observe"))
+    clearance = respx.post("https://vault.test/request-clearance").mock(
+        return_value=Response(200, json={
+            "status": "approved", "decision_status": "approved", "reason": "ok", "request_id": "req-1",
+        })
+    )
+    respx.post("https://vault.test/v1/evidence/check-action").mock(
+        return_value=Response(200, json={"decision": "allow", "reason": "ok", "action_type": "x"})
+    )
+
+    @enforce(tool_name="recommend", context={"policy_id": "ctx-policy"}, evidence=ACTION_RULE)
+    def recommend(customer_id: str):
+        return "ok"
+
+    assert recommend(customer_id="cust_42") == "ok"
+    body = json.loads(clearance.calls.last.request.content)
+    assert body["context"]["policy_id"] == "ctx-policy"
+
+
+@respx.mock
 def test_enforce_mode_blocks_on_deny():
     bylaw.configure(_config("enforce"))
     respx.post("https://vault.test/v1/evidence/check-action").mock(
@@ -195,6 +235,30 @@ def test_action_guard_skips_when_customer_is_unresolved():
 
     assert recommend() == "ok"
     assert not check.called
+
+
+@respx.mock
+def test_evidence_only_wrapper_clears_nested_current_clearance():
+    bylaw.configure(_config("off"))
+    respx.post("https://vault.test/request-clearance").mock(
+        return_value=Response(200, json={
+            "status": "approved", "decision_status": "approved", "token": "outer-token",
+            "reason": "ok", "request_id": "req-1",
+        })
+    )
+
+    @enforce(tool_name="inner", evidence=SOURCE_RULE)
+    def inner(customer_id: str):
+        return bylaw.current_token()
+
+    @enforce(tool_name="outer", policy_id="policy-x")
+    def outer():
+        before = bylaw.current_token()
+        during = inner(customer_id="cust_42")
+        after = bylaw.current_token()
+        return before, during, after
+
+    assert outer() == ("outer-token", None, "outer-token")
 
 
 @respx.mock
@@ -250,6 +314,18 @@ def test_unsupported_session_backend_is_rejected():
 
     with pytest.raises(ValueError, match="Unsupported evidence_session_backend"):
         bylaw.configure(cfg)
+
+
+def test_configure_resets_default_session_store():
+    from bylaw_python.evidence import _get_store
+
+    set_session_store(None)
+    bylaw.configure(_config("observe"))
+    _get_store().put_fact("sess_1", "cust_42", "date_of_birth", "fact_old")
+
+    bylaw.configure(_config("observe"))
+
+    assert _get_store().fact_ids("sess_1", "cust_42") == []
 
 
 @respx.mock
