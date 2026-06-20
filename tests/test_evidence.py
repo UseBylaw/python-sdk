@@ -238,6 +238,27 @@ def test_action_guard_skips_when_customer_is_unresolved():
 
 
 @respx.mock
+def test_enforce_mode_blocks_when_customer_is_unresolved():
+    bylaw.configure(_config("enforce"))
+    check = respx.post("https://vault.test/v1/evidence/check-action").mock(
+        return_value=Response(200, json={"decision": "allow", "reason": "ok", "action_type": "x"})
+    )
+    rule = EvidenceRule(kind="action", action_type="x")
+    ran = {"v": False}
+
+    @enforce(tool_name="recommend", evidence=rule)
+    def recommend():
+        ran["v"] = True
+        return "ok"
+
+    with pytest.raises(EvidenceBlockedError) as exc:
+        recommend()
+    assert "missing customer id" in str(exc.value)
+    assert ran["v"] is False
+    assert not check.called
+
+
+@respx.mock
 def test_evidence_only_wrapper_clears_nested_current_clearance():
     bylaw.configure(_config("off"))
     respx.post("https://vault.test/request-clearance").mock(
