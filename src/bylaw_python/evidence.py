@@ -123,6 +123,9 @@ def _build_action_request(
     session_id, ctx_customer = _active_session(client)
     customer_id = _resolve_customer(rule, tool_args, None, ctx_customer)
     if not customer_id:
+        if client.config.evidence_mode == "enforce":
+            logger.warning("evidence: no customer id for action tool; blocking action")
+            raise EvidenceBlockedError("missing customer id for action evidence check")
         logger.warning("evidence: no customer id for action tool; skipping action guard")
         return None
     store = _get_store(client.config.evidence_session_backend)
