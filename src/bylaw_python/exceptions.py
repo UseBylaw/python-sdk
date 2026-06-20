@@ -102,3 +102,23 @@ class ReviewPendingError(BylawError):
     def __init__(self, pending_approval: "Any") -> None:  # noqa: F821
         self.pending_approval = pending_approval
         super().__init__(f"Clearance pending review (request_id={pending_approval.request_id})")
+
+
+class EvidenceError(BylawError):
+    """Base for evidence-runtime failures (fact registration, check-action)."""
+
+
+class EvidenceBlockedError(EvidenceError):
+    """Raised in ``evidence_mode="enforce"`` when check-action denies a protected action.
+
+    Attributes:
+        reason: Human-readable reason from the evidence runtime.
+        decision: The raw decision (``deny`` / ``review``).
+        receipt_id: The receipt id recorded for this decision, if any.
+    """
+
+    def __init__(self, reason: str, decision: str = "deny", receipt_id: str | None = None) -> None:
+        self.reason = reason
+        self.decision = decision
+        self.receipt_id = receipt_id
+        super().__init__(f"Evidence check {decision}: {reason}")

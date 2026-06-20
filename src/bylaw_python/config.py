@@ -93,3 +93,16 @@ class VaultConfig(BaseSettings):
     """TTL for entries in the replay cache (seconds). Should be at least
     ``VAULT_JWT_TTL + 30`` to cover clock skew. Default 330 = 5 min TTL + 30s.
     Env: ``BYLAW_MAX_TOKEN_LIFETIME_SECONDS``."""
+
+    evidence_mode: str = "observe"
+    """Evidence enforcement mode for auto-registered facts and protected actions.
+    ``"off"``: skip the evidence layer entirely. ``"observe"`` (default): call
+    check-action and record ``would_*`` decisions but never block the agent —
+    the safe rollout mode. ``"enforce"``: raise :class:`EvidenceBlockedError`
+    on a deny. Host-native challenge resolution (review handling) is Phase 3.
+    Env: ``BYLAW_EVIDENCE_MODE``."""
+
+    evidence_session_backend: str = "memory"
+    """Backing store for the session evidence store. ``"memory"`` (V0 default).
+    Redis/Postgres backends are a later add for multi-worker / hosted runs.
+    Env: ``BYLAW_EVIDENCE_SESSION_BACKEND``."""

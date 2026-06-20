@@ -34,6 +34,7 @@ MAX_CONSECUTIVE_429: int = 10
 from .config import VaultConfig
 from .exceptions import (
     ClearanceDeniedError,
+    EvidenceError,
     ManualReviewTimeoutError,
     PolicyRegistrationError,
     QueueSaturatedError,
@@ -59,9 +60,12 @@ def _parse_retry_after(value: str | None) -> float | None:
     return min(secs, MAX_RETRY_AFTER_SECONDS)
 from .pending import PendingApproval
 from .models import (
+    CheckActionRequest,
+    CheckActionResult,
     ClearanceRequest,
     ClearanceResponse,
     ConsistencyProof,
+    EvidenceGraph,
     InclusionProof,
     LedgerEntry,
     LedgerCheckpoint,
@@ -71,6 +75,8 @@ from .models import (
     LedgerVerificationResult,
     PolicyRegistration,
     PolicyRegistrationResponse,
+    RegisterFactRequest,
+    RegisteredFact,
     _MISSING,
 )
 
@@ -587,6 +593,110 @@ class BylawClient:
             ) from exc
 
         return PolicyRegistrationResponse.model_validate(response.json())
+
+    # ------------------------------------------------------------------
+    # Evidence runtime (Phase 2)
+    # ------------------------------------------------------------------
+
+    def register_fact(self, request: RegisterFactRequest) -> RegisteredFact:
+        """Register an evidence fact extracted from a source tool result (sync)."""
+        idem_headers = {"Idempotency-Key": str(uuid.uuid4())}
+        try:
+            response = self._sync_retry(
+                lambda: self._get_sync_client().post(
+                    "/v1/evidence/facts", content=request.model_dump_json(), headers=idem_headers
+                )
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise EvidenceError(
+                f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
+            ) from exc
+        payload = response.json()
+        return RegisteredFact.model_validate(payload.get("fact", payload))
+
+    async def aregister_fact(self, request: RegisterFactRequest) -> RegisteredFact:
+        """Register an evidence fact (async)."""
+        idem_headers = {"Idempotency-Key": str(uuid.uuid4())}
+        try:
+            response = await self._async_retry(
+                lambda: self._get_async_client().post(
+                    "/v1/evidence/facts", content=request.model_dump_json(), headers=idem_headers
+                )
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise EvidenceError(
+                f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
+            ) from exc
+        payload = response.json()
+        return RegisteredFact.model_validate(payload.get("fact", payload))
+
+    def check_action(self, request: CheckActionRequest) -> CheckActionResult:
+        """Evaluate a protected action against current evidence (sync)."""
+        try:
+            response = self._sync_retry(
+                lambda: self._get_sync_client().post(
+                    "/v1/evidence/check-action", content=request.model_dump_json()
+                )
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise EvidenceError(
+                f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
+            ) from exc
+        return CheckActionResult.model_validate(response.json())
+
+    async def acheck_action(self, request: CheckActionRequest) -> CheckActionResult:
+        """Evaluate a protected action against current evidence (async)."""
+        try:
+            response = await self._async_retry(
+                lambda: self._get_async_client().post(
+                    "/v1/evidence/check-action", content=request.model_dump_json()
+                )
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise EvidenceError(
+                f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
+            ) from exc
+        return CheckActionResult.model_validate(response.json())
+
+    def fetch_evidence_graph(
+        self, customer_id: str, session_id: str = ""
+    ) -> EvidenceGraph:
+        """Fetch the current Evidence Graph for a customer/session (sync)."""
+        params = {"customer_id": customer_id}
+        if session_id:
+            params["session_id"] = session_id
+        try:
+            response = self._sync_retry(
+                lambda: self._get_sync_client().get("/v1/evidence/graph", params=params)
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise EvidenceError(
+                f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
+            ) from exc
+        return EvidenceGraph.model_validate(response.json())
+
+    async def afetch_evidence_graph(
+        self, customer_id: str, session_id: str = ""
+    ) -> EvidenceGraph:
+        """Fetch the current Evidence Graph for a customer/session (async)."""
+        params = {"customer_id": customer_id}
+        if session_id:
+            params["session_id"] = session_id
+        try:
+            response = await self._async_retry(
+                lambda: self._get_async_client().get("/v1/evidence/graph", params=params)
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise EvidenceError(
+                f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
+            ) from exc
+        return EvidenceGraph.model_validate(response.json())
 
     # ------------------------------------------------------------------
     # JWKS + A-JWT verification
