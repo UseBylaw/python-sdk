@@ -382,16 +382,29 @@ def enforce(
                         await aobserve_source(client, evidence, tool_args, result)
                     except Exception:  # observation must never break the agent
                         _evidence_log.warning("evidence: source observation failed", exc_info=True)
-                if ev_output and client.config.evidence_output_mode != "off":
+                output_mode = client.config.evidence_output_mode
+                if ev_output and output_mode != "off":
                     # Output enforcement is opt-in via its own mode. In observe it
                     # records and returns; in enforce an ungrounded number raises.
-                    await aguard_output(
-                        client,
-                        _extract_response_text(evidence, tool_args, result),
-                        rule=evidence,
-                        tool_args=tool_args,
-                        result=result,
-                    )
+                    if output_mode == "enforce":
+                        await aguard_output(
+                            client,
+                            _extract_response_text(evidence, tool_args, result),
+                            rule=evidence,
+                            tool_args=tool_args,
+                            result=result,
+                        )
+                    else:
+                        try:
+                            await aguard_output(
+                                client,
+                                _extract_response_text(evidence, tool_args, result),
+                                rule=evidence,
+                                tool_args=tool_args,
+                                result=result,
+                            )
+                        except Exception:  # output observation must never break the agent
+                            _evidence_log.warning("evidence: output observation failed", exc_info=True)
                 return result
 
             return async_wrapper  # type: ignore[return-value]
@@ -427,16 +440,29 @@ def enforce(
                         observe_source(client, evidence, tool_args, result)
                     except Exception:  # observation must never break the agent
                         _evidence_log.warning("evidence: source observation failed", exc_info=True)
-                if ev_output and client.config.evidence_output_mode != "off":
+                output_mode = client.config.evidence_output_mode
+                if ev_output and output_mode != "off":
                     # Output enforcement is opt-in via its own mode. In observe it
                     # records and returns; in enforce an ungrounded number raises.
-                    guard_output(
-                        client,
-                        _extract_response_text(evidence, tool_args, result),
-                        rule=evidence,
-                        tool_args=tool_args,
-                        result=result,
-                    )
+                    if output_mode == "enforce":
+                        guard_output(
+                            client,
+                            _extract_response_text(evidence, tool_args, result),
+                            rule=evidence,
+                            tool_args=tool_args,
+                            result=result,
+                        )
+                    else:
+                        try:
+                            guard_output(
+                                client,
+                                _extract_response_text(evidence, tool_args, result),
+                                rule=evidence,
+                                tool_args=tool_args,
+                                result=result,
+                            )
+                        except Exception:  # output observation must never break the agent
+                            _evidence_log.warning("evidence: output observation failed", exc_info=True)
                 return result
 
             return sync_wrapper  # type: ignore[return-value]

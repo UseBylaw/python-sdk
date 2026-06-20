@@ -351,6 +351,8 @@ def guard_output(
         return None
     built = _build_output_request(client, rule, response_text, tool_args or {}, result, customer_id)
     if built is None:
+        if mode == "enforce":
+            raise EvidenceError("evidence output enforcement requires customer id")
         logger.warning("evidence: no customer id for output guard; skipping")
         return None
     req, session_id, resolved_customer = built
@@ -430,6 +432,8 @@ async def aguard_output(
         return None
     built = _build_output_request(client, rule, response_text, tool_args or {}, result, customer_id)
     if built is None:
+        if mode == "enforce":
+            raise EvidenceError("evidence output enforcement requires customer id")
         logger.warning("evidence: no customer id for output guard; skipping")
         return None
     req, session_id, resolved_customer = built

@@ -170,6 +170,54 @@ def test_enforce_mode_blocks_empty_extracted_response_text():
     assert not route.called
 
 
+def test_enforce_mode_blocks_missing_customer_id():
+    bylaw.configure(_config("enforce"))
+    bad_rule = EvidenceRule(
+        kind="output",
+        action_type="send_financial_response",
+        response_text="result.message",
+    )
+
+    @enforce(tool_name="send_reply", evidence=bad_rule)
+    def send_reply():
+        return {"message": "Your balance is up 12% this quarter."}
+
+    with pytest.raises(EvidenceError, match="customer id"):
+        send_reply()
+
+
+def test_observe_mode_continues_on_check_output_transport_failure(monkeypatch):
+    client = bylaw.configure(_config("observe"))
+
+    def fail_check_output(_request):
+        raise bylaw.VaultConnectionError("vault down")
+
+    monkeypatch.setattr(client, "check_output", fail_check_output)
+
+    @enforce(tool_name="send_reply", evidence=OUTPUT_RULE)
+    def send_reply(customer_id: str):
+        return {"message": "Your balance is up 12% this quarter."}
+
+    assert send_reply(customer_id="cust_1")["message"].startswith("Your balance")
+
+
+@pytest.mark.asyncio
+async def test_observe_mode_continues_on_async_check_output_transport_failure(monkeypatch):
+    client = bylaw.configure(_config("observe"))
+
+    async def fail_check_output(_request):
+        raise bylaw.VaultConnectionError("vault down")
+
+    monkeypatch.setattr(client, "acheck_output", fail_check_output)
+
+    @enforce(tool_name="send_reply", evidence=OUTPUT_RULE)
+    async def send_reply(customer_id: str):
+        return {"message": "Your balance is up 12% this quarter."}
+
+    out = await send_reply(customer_id="cust_1")
+    assert out["message"].startswith("Your balance")
+
+
 @respx.mock
 def test_output_obligations_carried_into_session_store():
     bylaw.configure(_config("observe"))
