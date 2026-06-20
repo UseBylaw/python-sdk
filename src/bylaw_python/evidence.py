@@ -35,7 +35,15 @@ def _normalize_backend(backend: str | None) -> str:
 
 def _configure_session_store(backend: str | None) -> None:
     """Validate and initialize the configured session evidence store backend."""
-    _get_store(backend)
+    global _store, _store_backend
+    backend_name = _normalize_backend(backend)
+    if backend_name not in {"memory", "in-memory"}:
+        _get_store(backend)
+        return
+    if _store_backend == "manual" and _store is not None:
+        return
+    _store = InMemorySessionStore()
+    _store_backend = backend_name
 
 
 def _get_store(backend: str | None = "memory") -> SessionEvidenceStore:
