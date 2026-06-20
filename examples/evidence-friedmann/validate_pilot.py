@@ -20,7 +20,7 @@ import os
 import sys
 
 import bylaw_python as ledgix
-from bylaw_python import BylawClient, CheckOutputRequest, VaultConfig
+from bylaw_python import BylawClient, VaultConfig
 
 import tools
 
@@ -49,6 +49,28 @@ def main() -> int:
     )
     client: BylawClient = ledgix.configure(cfg)
     wrapped = ledgix.auto_instrument(tools, manifest="ledgix.yaml")
+    decision_receipts: list[tuple[str, str]] = []
+    original_check_action = client.check_action
+    original_check_output = client.check_output
+
+    def record_decision(
+        kind: str, result: ledgix.CheckActionResult
+    ) -> ledgix.CheckActionResult:
+        decision_receipts.append((kind, result.receipt_id))
+        return result
+
+    def recording_check_action(
+        request: ledgix.CheckActionRequest,
+    ) -> ledgix.CheckActionResult:
+        return record_decision("check-action", original_check_action(request))
+
+    def recording_check_output(
+        request: ledgix.CheckOutputRequest,
+    ) -> ledgix.CheckActionResult:
+        return record_decision("check-output", original_check_output(request))
+
+    client.check_action = recording_check_action  # type: ignore[method-assign]
+    client.check_output = recording_check_output  # type: ignore[method-assign]
 
     print("Ledgix pilot validation — Friedmann sample\n")
     check("1. Configured via ledgix.yaml only (5 tools, zero manual fact-IDs)",
@@ -87,14 +109,19 @@ def main() -> int:
             grounded_ok = False
         check("4. Grounded 12% is allowed (recomputed from balances)", grounded_ok)
 
-        # 5. Every decision returns a receipt. Inspect one via the client directly.
-        result = client.check_output(CheckOutputRequest(
-            customer_id=CUSTOMER, session_id=SESSION,
-            action_type="send_financial_response", mode="enforce",
-            response_text=GROUNDED,
-        ))
-        check("5. Every decision returns a receipt", bool(result.receipt_id),
-              f"receipt_id={result.receipt_id or '(none)'}")
+        # 5. Every wrapped check-action/check-output decision returns a receipt.
+        expected_decisions = 3
+        receipt_count = sum(1 for _, receipt_id in decision_receipts if receipt_id)
+        missing_receipts = [kind for kind, receipt_id in decision_receipts if not receipt_id]
+        detail = (
+            f"{receipt_count}/{expected_decisions} instrumented decisions returned receipts"
+        )
+        if missing_receipts:
+            detail += f"; missing: {', '.join(missing_receipts)}"
+        check("5. Every decision returns a receipt",
+              len(decision_receipts) == expected_decisions
+              and receipt_count == expected_decisions,
+              detail)
 
     print()
     if _failures:
