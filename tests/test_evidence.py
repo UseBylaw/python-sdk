@@ -6,7 +6,7 @@ import json
 
 import pytest
 import respx
-from httpx import Response
+from httpx import ConnectError, Response
 
 import bylaw_python as bylaw
 from bylaw_python import VaultConfig
@@ -144,6 +144,23 @@ def test_observe_mode_does_not_block_on_deny():
 
 
 @respx.mock
+def test_observe_mode_does_not_block_on_transport_failure():
+    bylaw.configure(_config("observe"))
+    respx.post("https://vault.test/v1/evidence/check-action").mock(
+        side_effect=ConnectError("connection refused")
+    )
+    ran = {"v": False}
+
+    @enforce(tool_name="recommend", evidence=ACTION_RULE)
+    def recommend(customer_id: str):
+        ran["v"] = True
+        return "ok"
+
+    assert recommend(customer_id="cust_42") == "ok"
+    assert ran["v"] is True
+
+
+@respx.mock
 def test_enforce_mode_blocks_on_deny():
     bylaw.configure(_config("enforce"))
     respx.post("https://vault.test/v1/evidence/check-action").mock(
@@ -165,13 +182,32 @@ def test_enforce_mode_blocks_on_deny():
 
 
 @respx.mock
+def test_action_guard_skips_when_customer_is_unresolved():
+    bylaw.configure(_config("observe"))
+    check = respx.post("https://vault.test/v1/evidence/check-action").mock(
+        return_value=Response(200, json={"decision": "deny", "reason": "missing customer", "action_type": "x"})
+    )
+    rule = EvidenceRule(kind="action", action_type="x")
+
+    @enforce(tool_name="recommend", evidence=rule)
+    def recommend():
+        return "ok"
+
+    assert recommend() == "ok"
+    assert not check.called
+
+
+@respx.mock
 def test_obligations_carried_into_session_store():
     bylaw.configure(_config("observe"))
-    respx.post("https://vault.test/v1/evidence/check-action").mock(
-        return_value=Response(200, json={
-            "decision": "allow_with_obligations", "reason": "chat session only", "action_type": "x",
-            "obligations": [{"code": "do_not_update_profile", "field": "date_of_birth"}],
-        })
+    check = respx.post("https://vault.test/v1/evidence/check-action").mock(
+        side_effect=[
+            Response(200, json={
+                "decision": "allow_with_obligations", "reason": "chat session only", "action_type": "x",
+                "obligations": [{"code": "do_not_update_profile", "field": "date_of_birth"}],
+            }),
+            Response(200, json={"decision": "allow", "reason": "ok", "action_type": "x"}),
+        ]
     )
 
     @enforce(tool_name="recommend", evidence=ACTION_RULE)
@@ -179,9 +215,11 @@ def test_obligations_carried_into_session_store():
         return "ok"
 
     recommend(customer_id="cust_42")
-    store = bylaw.InMemorySessionStore  # type marker only
+    recommend(customer_id="cust_42")
     from bylaw_python.evidence import _get_store
     assert "do_not_update_profile" in _get_store().obligations("sess_1", "cust_42")
+    body = json.loads(check.calls.last.request.content)
+    assert body["obligations"] == ["do_not_update_profile"]
 
 
 @respx.mock
@@ -206,10 +244,23 @@ def test_off_mode_skips_evidence_entirely():
     assert not check.called
 
 
+def test_unsupported_session_backend_is_rejected():
+    set_session_store(None)
+    cfg = _config("observe").model_copy(update={"evidence_session_backend": "redis"})
+
+    with pytest.raises(ValueError, match="Unsupported evidence_session_backend"):
+        bylaw.configure(cfg)
+
+
 @respx.mock
 def test_evidence_session_context_overrides_customer():
     bylaw.configure(_config("observe"))
     facts = respx.post("https://vault.test/v1/evidence/facts").mock(side_effect=_facts_side_effect)
+    clearance = respx.post("https://vault.test/request-clearance").mock(
+        return_value=Response(200, json={
+            "status": "approved", "decision_status": "approved", "reason": "ok", "request_id": "req-1",
+        })
+    )
     check = respx.post("https://vault.test/v1/evidence/check-action").mock(
         return_value=Response(200, json={"decision": "allow", "reason": "ok", "action_type": "x"})
     )
@@ -222,7 +273,7 @@ def test_evidence_session_context_overrides_customer():
     def get_profile():
         return {"dob": "1988-05-12"}
 
-    @enforce(tool_name="recommend", evidence=act)
+    @enforce(tool_name="recommend", policy_id="policy-x", evidence=act)
     def recommend():
         return "ok"
 
@@ -233,6 +284,8 @@ def test_evidence_session_context_overrides_customer():
     body = json.loads(check.calls.last.request.content)
     assert body["session_id"] == "sess_X"
     assert {f["fact_id"] for f in body["facts"]} == {"fact_date_of_birth"}
+    clearance_body = json.loads(clearance.calls.last.request.content)
+    assert clearance_body["session_id"] == "sess_X"
 
 
 # ---------------------------------------------------------------------------
