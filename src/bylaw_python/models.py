@@ -400,6 +400,39 @@ class CheckActionRequest(BaseModel):
     current_turn: int = 0
 
 
+class OutputClaim(BaseModel):
+    """A caller-declared provenance hint for a number in the response text.
+
+    Optional — Vault grounds numbers deterministically against registered facts
+    and contract formulas regardless. A declared claim is only an escape-hatch
+    rung that must still reference a real authoritative fact to bind.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    claim_text: str = ""
+    claim_type: str = ""
+    source_fact_id: str = ""
+    source_type: str = ""
+    source_field: str = ""
+    value: str = ""
+
+
+class CheckOutputRequest(BaseModel):
+    """Request to verify that the numbers in an agent's customer-facing response
+    are grounded in registered evidence (Phase 4 output grounding)."""
+
+    customer_id: str = ""
+    session_id: str = ""
+    mode: str = ""
+    action_type: str = ""
+    workflow: str = ""
+    response_text: str = ""
+    facts: list[FactRef] = Field(default_factory=list)
+    output_claims: list[OutputClaim] = Field(default_factory=list)
+    current_turn: int = 0
+
+
 class ChallengeSource(BaseModel):
     model_config = ConfigDict(extra="ignore")
 

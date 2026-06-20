@@ -63,6 +63,7 @@ from .models import (
     Challenge,
     CheckActionRequest,
     CheckActionResult,
+    CheckOutputRequest,
     ClearanceRequest,
     ClearanceResponse,
     ConsistencyProof,
@@ -655,6 +656,36 @@ class BylawClient:
             response = await self._async_retry(
                 lambda: self._get_async_client().post(
                     "/v1/evidence/check-action", content=request.model_dump_json()
+                )
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise EvidenceError(
+                f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
+            ) from exc
+        return CheckActionResult.model_validate(response.json())
+
+    def check_output(self, request: CheckOutputRequest) -> CheckActionResult:
+        """Verify the numbers in a customer-facing response are grounded (sync)."""
+        try:
+            response = self._sync_retry(
+                lambda: self._get_sync_client().post(
+                    "/v1/evidence/check-output", content=request.model_dump_json()
+                )
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise EvidenceError(
+                f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
+            ) from exc
+        return CheckActionResult.model_validate(response.json())
+
+    async def acheck_output(self, request: CheckOutputRequest) -> CheckActionResult:
+        """Verify the numbers in a customer-facing response are grounded (async)."""
+        try:
+            response = await self._async_retry(
+                lambda: self._get_async_client().post(
+                    "/v1/evidence/check-output", content=request.model_dump_json()
                 )
             )
             response.raise_for_status()

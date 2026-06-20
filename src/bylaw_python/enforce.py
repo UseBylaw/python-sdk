@@ -20,9 +20,12 @@ from .config import VaultConfig
 from .evidence import (
     _active_session,
     _configure_session_store,
+    _extract_response_text,
     aguard_action,
+    aguard_output,
     aobserve_source,
     guard_action,
+    guard_output,
     observe_source,
 )
 from .exceptions import ClearanceDeniedError, ReviewPendingError
@@ -333,6 +336,7 @@ def enforce(
         do_clearance = evidence is None or has_policy_context
         ev_action = evidence is not None and evidence.kind == "action"
         ev_source = evidence is not None and evidence.kind == "source"
+        ev_output = evidence is not None and evidence.kind == "output"
 
         def _build_request(client: BylawClient, tool_args: dict[str, Any]) -> ClearanceRequest:
             return ClearanceRequest(
@@ -378,6 +382,16 @@ def enforce(
                         await aobserve_source(client, evidence, tool_args, result)
                     except Exception:  # observation must never break the agent
                         _evidence_log.warning("evidence: source observation failed", exc_info=True)
+                if ev_output and client.config.evidence_output_mode != "off":
+                    # Output enforcement is opt-in via its own mode. In observe it
+                    # records and returns; in enforce an ungrounded number raises.
+                    await aguard_output(
+                        client,
+                        _extract_response_text(evidence, tool_args, result),
+                        rule=evidence,
+                        tool_args=tool_args,
+                        result=result,
+                    )
                 return result
 
             return async_wrapper  # type: ignore[return-value]
@@ -413,6 +427,16 @@ def enforce(
                         observe_source(client, evidence, tool_args, result)
                     except Exception:  # observation must never break the agent
                         _evidence_log.warning("evidence: source observation failed", exc_info=True)
+                if ev_output and client.config.evidence_output_mode != "off":
+                    # Output enforcement is opt-in via its own mode. In observe it
+                    # records and returns; in enforce an ungrounded number raises.
+                    guard_output(
+                        client,
+                        _extract_response_text(evidence, tool_args, result),
+                        rule=evidence,
+                        tool_args=tool_args,
+                        result=result,
+                    )
                 return result
 
             return sync_wrapper  # type: ignore[return-value]

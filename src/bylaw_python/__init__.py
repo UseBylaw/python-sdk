@@ -35,7 +35,13 @@ from .enforce import (
     tool,
     vault_enforce,
 )
-from .evidence import evidence_session, set_challenge_handler, set_session_store
+from .evidence import (
+    aguard_output,
+    evidence_session,
+    guard_output,
+    set_challenge_handler,
+    set_session_store,
+)
 from .manifest import EvidenceRule, Manifest, ManifestRule, load_manifest
 from .session_store import InMemorySessionStore, SessionEvidenceStore
 from .exceptions import (
@@ -58,10 +64,12 @@ from .models import (
     ChallengeResolution,
     CheckActionRequest,
     CheckActionResult,
+    CheckOutputRequest,
     ClearanceRequest,
     ClearanceResponse,
     ConsistencyProof,
     EvidenceGraph,
+    OutputClaim,
     ResolveChallengeRequest,
     InclusionProof,
     LedgerCheckpoint,
@@ -76,7 +84,7 @@ from .models import (
     RegisteredFact,
 )
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 __all__ = [
     # Core
@@ -100,6 +108,11 @@ __all__ = [
     "set_challenge_handler",
     "InMemorySessionStore",
     "SessionEvidenceStore",
+    # Output grounding (Phase 4)
+    "guard_output",
+    "aguard_output",
+    "CheckOutputRequest",
+    "OutputClaim",
     "CheckActionRequest",
     "CheckActionResult",
     "Challenge",
