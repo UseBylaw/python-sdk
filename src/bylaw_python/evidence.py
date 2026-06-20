@@ -343,7 +343,11 @@ def guard_output(
     for host-native resolution first. Returns the result (or ``None`` if skipped).
     """
     mode = client.config.evidence_output_mode
-    if mode == "off" or not response_text:
+    if mode == "off":
+        return None
+    if not response_text:
+        if mode == "enforce":
+            raise EvidenceError("evidence output enforcement requires non-empty response text")
         return None
     built = _build_output_request(client, rule, response_text, tool_args or {}, result, customer_id)
     if built is None:
@@ -357,6 +361,7 @@ def guard_output(
             raise
         logger.warning("evidence: check-output failed (observe, continuing): %s", exc)
         return None
+    _record_obligations(session_id, resolved_customer, result_check)
     if result_check.is_allowed:
         return result_check
     if mode != "enforce":
@@ -365,6 +370,7 @@ def guard_output(
     if result_check.decision == "review" and result_check.challenge is not None and _challenge_handler is not None:
         resolution = _coerce_resolution(_challenge_handler(result_check.challenge))
         final = client.resolve_challenge(_resolve_request(result_check.challenge, resolution))
+        _record_obligations(session_id, resolved_customer, final)
         if final.is_allowed:
             return final
         _block(final)
@@ -416,7 +422,11 @@ async def aguard_output(
 ) -> CheckActionResult | None:
     """Async :func:`guard_output`."""
     mode = client.config.evidence_output_mode
-    if mode == "off" or not response_text:
+    if mode == "off":
+        return None
+    if not response_text:
+        if mode == "enforce":
+            raise EvidenceError("evidence output enforcement requires non-empty response text")
         return None
     built = _build_output_request(client, rule, response_text, tool_args or {}, result, customer_id)
     if built is None:
@@ -430,6 +440,7 @@ async def aguard_output(
             raise
         logger.warning("evidence: check-output failed (observe, continuing): %s", exc)
         return None
+    _record_obligations(session_id, resolved_customer, result_check)
     if result_check.is_allowed:
         return result_check
     if mode != "enforce":
@@ -442,6 +453,7 @@ async def aguard_output(
         final = await client.aresolve_challenge(
             _resolve_request(result_check.challenge, _coerce_resolution(resolution))
         )
+        _record_obligations(session_id, resolved_customer, final)
         if final.is_allowed:
             return final
         _block(final)

@@ -12,7 +12,7 @@ import bylaw_python as bylaw
 from bylaw_python import VaultConfig, guard_output
 from bylaw_python.enforce import enforce, _get_default_client as get_default_client
 from bylaw_python.evidence import set_session_store
-from bylaw_python.exceptions import EvidenceBlockedError
+from bylaw_python.exceptions import EvidenceBlockedError, EvidenceError
 from bylaw_python.manifest import EvidenceRule, load_manifest
 from bylaw_python.session_store import InMemorySessionStore
 
@@ -48,6 +48,15 @@ OUTPUT_RULE = EvidenceRule(
 
 def _allow(_request) -> Response:
     return Response(200, json={"decision": "allow", "reason": "numbers grounded", "action_type": "send_financial_response"})
+
+
+def _allow_with_obligations(_request) -> Response:
+    return Response(200, json={
+        "decision": "allow_with_obligations",
+        "reason": "numbers grounded with obligations",
+        "action_type": "send_financial_response",
+        "obligations": [{"code": "cite_sources", "field": "response_text"}],
+    })
 
 
 def _deny(_request) -> Response:
@@ -139,6 +148,40 @@ def test_enforce_mode_allows_grounded_number():
         return {"message": "Your balance is up 12% this quarter."}
 
     assert send_reply(customer_id="cust_1")["message"].startswith("Your balance")
+
+
+@respx.mock
+def test_enforce_mode_blocks_empty_extracted_response_text():
+    bylaw.configure(_config("enforce"))
+    route = respx.post("https://vault.test/v1/evidence/check-output").mock(side_effect=_allow)
+    bad_rule = EvidenceRule(
+        kind="output",
+        action_type="send_financial_response",
+        customer_id="args.customer_id",
+        response_text="result.missing",
+    )
+
+    @enforce(tool_name="send_reply", evidence=bad_rule)
+    def send_reply(customer_id: str):
+        return {"message": "Your balance is up 12% this quarter."}
+
+    with pytest.raises(EvidenceError, match="non-empty response text"):
+        send_reply(customer_id="cust_1")
+    assert not route.called
+
+
+@respx.mock
+def test_output_obligations_carried_into_session_store():
+    bylaw.configure(_config("observe"))
+    respx.post("https://vault.test/v1/evidence/check-output").mock(side_effect=_allow_with_obligations)
+
+    @enforce(tool_name="send_reply", evidence=OUTPUT_RULE)
+    def send_reply(customer_id: str):
+        return {"message": "Your balance is up 12% this quarter."}
+
+    send_reply(customer_id="cust_1")
+    from bylaw_python.evidence import _get_store
+    assert "cite_sources" in _get_store().obligations("sess_1", "cust_1")
 
 
 # ---------------------------------------------------------------------------
