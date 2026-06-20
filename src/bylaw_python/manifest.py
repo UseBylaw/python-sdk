@@ -44,8 +44,8 @@ class EvidenceRule:
 
     def __post_init__(self) -> None:
         kind = self.kind.strip().lower()
-        if kind not in {"source", "action"}:
-            raise ValueError("evidence kind must be one of: source, action")
+        if kind not in {"source", "action", "output"}:
+            raise ValueError("evidence kind must be one of: source, action, output")
         object.__setattr__(self, "kind", kind)
 
 

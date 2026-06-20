@@ -348,6 +348,7 @@ def guard_output(
     if not response_text:
         if mode == "enforce":
             raise EvidenceError("evidence output enforcement requires non-empty response text")
+        logger.warning("evidence: empty response text for output guard; skipping")
         return None
     built = _build_output_request(client, rule, response_text, tool_args or {}, result, customer_id)
     if built is None:
@@ -429,6 +430,7 @@ async def aguard_output(
     if not response_text:
         if mode == "enforce":
             raise EvidenceError("evidence output enforcement requires non-empty response text")
+        logger.warning("evidence: empty response text for output guard; skipping")
         return None
     built = _build_output_request(client, rule, response_text, tool_args or {}, result, customer_id)
     if built is None:

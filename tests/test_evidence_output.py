@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 
 import pytest
 import respx
@@ -168,6 +169,27 @@ def test_enforce_mode_blocks_empty_extracted_response_text():
     with pytest.raises(EvidenceError, match="non-empty response text"):
         send_reply(customer_id="cust_1")
     assert not route.called
+
+
+@respx.mock
+def test_observe_mode_warns_on_empty_extracted_response_text(caplog):
+    bylaw.configure(_config("observe"))
+    route = respx.post("https://vault.test/v1/evidence/check-output").mock(side_effect=_allow)
+    bad_rule = EvidenceRule(
+        kind="output",
+        action_type="send_financial_response",
+        customer_id="args.customer_id",
+        response_text="result.missing",
+    )
+    caplog.set_level(logging.WARNING, logger="bylaw.evidence")
+
+    @enforce(tool_name="send_reply", evidence=bad_rule)
+    def send_reply(customer_id: str):
+        return {"message": "Your balance is up 12% this quarter."}
+
+    assert send_reply(customer_id="cust_1")["message"].startswith("Your balance")
+    assert not route.called
+    assert "evidence: empty response text for output guard; skipping" in caplog.text
 
 
 def test_enforce_mode_blocks_missing_customer_id():
