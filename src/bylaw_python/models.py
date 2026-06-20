@@ -396,6 +396,7 @@ class CheckActionRequest(BaseModel):
     action_type: str
     workflow: str = ""
     facts: list[FactRef] = Field(default_factory=list)
+    obligations: list[str] = Field(default_factory=list)
     current_turn: int = 0
 
 

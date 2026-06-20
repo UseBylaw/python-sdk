@@ -17,7 +17,14 @@ from typing import Any, Callable, TypeVar
 
 from .client import BylawClient
 from .config import VaultConfig
-from .evidence import aguard_action, aobserve_source, guard_action, observe_source
+from .evidence import (
+    _active_session,
+    _configure_session_store,
+    aguard_action,
+    aobserve_source,
+    guard_action,
+    observe_source,
+)
 from .exceptions import ClearanceDeniedError, ReviewPendingError
 from .manifest import EvidenceRule, Manifest, ManifestRule, load_manifest
 from .models import ClearanceRequest, ClearanceResponse
@@ -62,6 +69,7 @@ def configure(config: VaultConfig | None = None, **kwargs: Any) -> BylawClient:
     global _default_client
     if config is None:
         config = VaultConfig(**kwargs)
+    _configure_session_store(config.evidence_session_backend)
     _default_client = BylawClient(config)
     return _default_client
 
@@ -330,7 +338,7 @@ def enforce(
                 tool_name=resolved_name,
                 tool_args=tool_args,
                 agent_id=client.config.agent_id,
-                session_id=client.config.session_id,
+                session_id=_active_session(client)[0],
                 context={**(context or {}), **({"policy_id": policy_id} if policy_id else {})},
                 data_categories=data_categories,
                 purpose=purpose,

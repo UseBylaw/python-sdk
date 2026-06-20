@@ -14,7 +14,7 @@ import logging
 from typing import Any, Iterator
 
 from .client import BylawClient
-from .exceptions import EvidenceBlockedError, EvidenceError
+from .exceptions import EvidenceBlockedError, EvidenceError, VaultConnectionError
 from .jsonpath import extract_path
 from .manifest import EvidenceRule
 from .models import CheckActionRequest, CheckActionResult, FactRef, RegisterFactRequest
@@ -26,19 +26,39 @@ _session_ctx: contextvars.ContextVar[tuple[str, str] | None] = contextvars.Conte
     "_bylaw_evidence_session", default=None
 )
 _store: SessionEvidenceStore | None = None
+_store_backend: str | None = None
 
 
-def _get_store() -> SessionEvidenceStore:
-    global _store
+def _normalize_backend(backend: str | None) -> str:
+    return (backend or "memory").strip().lower().replace("_", "-")
+
+
+def _configure_session_store(backend: str | None) -> None:
+    """Validate and initialize the configured session evidence store backend."""
+    _get_store(backend)
+
+
+def _get_store(backend: str | None = "memory") -> SessionEvidenceStore:
+    global _store, _store_backend
+    backend_name = _normalize_backend(backend)
+    if backend_name not in {"memory", "in-memory"}:
+        if _store_backend == "manual" and _store is not None:
+            return _store
+        raise ValueError(
+            "Unsupported evidence_session_backend "
+            f"{backend!r}; configure a custom store with set_session_store()"
+        )
     if _store is None:
         _store = InMemorySessionStore()
+        _store_backend = backend_name
     return _store
 
 
 def set_session_store(store: SessionEvidenceStore | None) -> None:
     """Override the process session evidence store (tests / Redis backend)."""
-    global _store
+    global _store, _store_backend
     _store = store
+    _store_backend = "manual" if store is not None else None
 
 
 @contextlib.contextmanager
@@ -94,15 +114,20 @@ def _build_action_request(
 ) -> tuple[CheckActionRequest, str, str] | None:
     session_id, ctx_customer = _active_session(client)
     customer_id = _resolve_customer(rule, tool_args, None, ctx_customer)
-    store = _get_store()
+    if not customer_id:
+        logger.warning("evidence: no customer id for action tool; skipping action guard")
+        return None
+    store = _get_store(client.config.evidence_session_backend)
     fields = list(rule.requires) or None
-    fact_ids = store.fact_ids(session_id, customer_id, fields) if customer_id else []
+    fact_ids = store.fact_ids(session_id, customer_id, fields)
+    obligations = sorted(store.obligations(session_id, customer_id))
     req = CheckActionRequest(
         customer_id=customer_id,
         session_id=session_id,
         mode=client.config.evidence_mode,
         action_type=rule.action_type or "",
         facts=[FactRef(fact_id=fid) for fid in fact_ids],
+        obligations=obligations,
     )
     return req, session_id, customer_id
 
@@ -111,7 +136,7 @@ def _apply_action_result(
     client: BylawClient, session_id: str, customer_id: str, result: CheckActionResult
 ) -> None:
     mode = client.config.evidence_mode
-    store = _get_store()
+    store = _get_store(client.config.evidence_session_backend)
     if result.obligations:
         store.add_obligations(session_id, customer_id, [o.code for o in result.obligations])
     if result.is_allowed:
@@ -132,7 +157,7 @@ def guard_action(client: BylawClient, rule: EvidenceRule, tool_args: dict[str, A
     req, session_id, customer_id = built
     try:
         result = client.check_action(req)
-    except EvidenceError as exc:
+    except (EvidenceError, VaultConnectionError) as exc:
         if client.config.evidence_mode == "enforce":
             raise
         logger.warning("evidence: check-action failed (observe, continuing): %s", exc)
@@ -148,7 +173,7 @@ def observe_source(
     if not customer_id:
         logger.warning("evidence: no customer id for source tool; skipping fact registration")
         return
-    store = _get_store()
+    store = _get_store(client.config.evidence_session_backend)
     root = {"args": tool_args, "result": result}
     for field, path in rule.fields.items():
         value = extract_path(root, path)
@@ -176,7 +201,7 @@ async def aguard_action(client: BylawClient, rule: EvidenceRule, tool_args: dict
     req, session_id, customer_id = built
     try:
         result = await client.acheck_action(req)
-    except EvidenceError as exc:
+    except (EvidenceError, VaultConnectionError) as exc:
         if client.config.evidence_mode == "enforce":
             raise
         logger.warning("evidence: check-action failed (observe, continuing): %s", exc)
@@ -192,7 +217,7 @@ async def aobserve_source(
     if not customer_id:
         logger.warning("evidence: no customer id for source tool; skipping fact registration")
         return
-    store = _get_store()
+    store = _get_store(client.config.evidence_session_backend)
     root = {"args": tool_args, "result": result}
     for field, path in rule.fields.items():
         value = extract_path(root, path)
