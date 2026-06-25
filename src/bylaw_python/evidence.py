@@ -167,7 +167,19 @@ def _fact_request(
         value=value,
         source_type=rule.source_type or "tool_call",
         source_id=agent_id,
+        is_inferred=rule.inferred,
     )
+
+
+def _threshold_context(rule: EvidenceRule, tool_args: dict[str, Any]) -> dict[str, Any]:
+    """Select the wrapped tool's args to forward into the check-action context so
+    the gate can apply numeric arg-threshold rules. A declared ``threshold_args``
+    narrows to those keys; otherwise all args are forwarded."""
+    if not tool_args:
+        return {}
+    if rule.threshold_args:
+        return {k: tool_args[k] for k in rule.threshold_args if k in tool_args}
+    return dict(tool_args)
 
 
 def _build_action_request(
@@ -192,6 +204,7 @@ def _build_action_request(
         action_type=rule.action_type or "",
         facts=[FactRef(fact_id=fid) for fid in fact_ids],
         obligations=obligations,
+        context=_threshold_context(rule, tool_args),
     )
     return req, session_id, customer_id
 
