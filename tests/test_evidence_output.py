@@ -140,6 +140,21 @@ def test_enforce_mode_blocks_ungrounded_number():
 
 
 @respx.mock
+def test_output_mode_normalizes_casing_and_enforces():
+    bylaw.configure(_config(" ENFORCE "))
+    route = respx.post("https://vault.test/v1/evidence/check-output").mock(side_effect=_deny)
+
+    @enforce(tool_name="send_reply", evidence=OUTPUT_RULE)
+    def send_reply(customer_id: str):
+        return {"message": "You should move $52,000 into bonds."}
+
+    with pytest.raises(EvidenceBlockedError):
+        send_reply(customer_id="cust_1")
+    body = json.loads(route.calls.last.request.content)
+    assert body["mode"] == "enforce"
+
+
+@respx.mock
 def test_enforce_mode_allows_grounded_number():
     bylaw.configure(_config("enforce"))
     respx.post("https://vault.test/v1/evidence/check-output").mock(side_effect=_allow)

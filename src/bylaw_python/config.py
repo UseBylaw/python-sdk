@@ -126,3 +126,11 @@ class VaultConfig(BaseSettings):
         if mode not in {"off", "observe", "enforce"}:
             raise ValueError("evidence_mode must be one of: off, observe, enforce")
         return mode
+
+    @field_validator("evidence_output_mode")
+    @classmethod
+    def _validate_evidence_output_mode(cls, value: str) -> str:
+        mode = value.strip().lower()
+        if mode not in {"off", "observe", "enforce"}:
+            raise ValueError("evidence_output_mode must be one of: off, observe, enforce")
+        return mode
