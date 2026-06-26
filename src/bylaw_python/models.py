@@ -347,6 +347,7 @@ class RegisterFactRequest(BaseModel):
     source_actor: str = ""
     scope: str = ""
     authority_level: str = ""
+    is_inferred: bool = False
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -398,6 +399,7 @@ class CheckActionRequest(BaseModel):
     facts: list[FactRef] = Field(default_factory=list)
     obligations: list[str] = Field(default_factory=list)
     current_turn: int = 0
+    context: dict[str, Any] = Field(default_factory=dict)
 
 
 class OutputClaim(BaseModel):
