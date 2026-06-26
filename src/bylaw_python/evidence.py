@@ -23,7 +23,9 @@ from .models import (
     ChallengeResolution,
     CheckActionRequest,
     CheckActionResult,
+    CheckOutputRequest,
     FactRef,
+    OutputClaim,
     RegisterFactRequest,
     ResolveChallengeRequest,
 )
@@ -194,6 +196,68 @@ def _build_action_request(
     return req, session_id, customer_id
 
 
+def _coerce_output_claims(raw: Any) -> list[OutputClaim]:
+    if not isinstance(raw, list):
+        return []
+    out: list[OutputClaim] = []
+    for item in raw:
+        if isinstance(item, OutputClaim):
+            out.append(item)
+        elif isinstance(item, dict):
+            out.append(OutputClaim(**item))
+    return out
+
+
+def _build_output_request(
+    client: BylawClient,
+    rule: EvidenceRule | None,
+    response_text: str,
+    tool_args: dict[str, Any],
+    result: Any,
+    customer_override: str = "",
+) -> tuple[CheckOutputRequest, str, str] | None:
+    """Build a check-output request from a wrapped result or raw text.
+
+    Attaches ALL of the customer's session facts (not a ``requires`` subset) so
+    Vault's derivation search has every numeric input available to ground a
+    number. Returns ``None`` when no customer can be resolved.
+    """
+    session_id, ctx_customer = _active_session(client)
+    customer_id = customer_override
+    if not customer_id and rule is not None:
+        customer_id = _resolve_customer(rule, tool_args, result, ctx_customer)
+    if not customer_id:
+        customer_id = ctx_customer
+    if not customer_id:
+        return None
+    store = _get_store()
+    fact_ids = store.fact_ids(session_id, customer_id, None)
+    claims: list[OutputClaim] = []
+    if rule is not None and rule.claims_path:
+        claims = _coerce_output_claims(
+            extract_path({"args": tool_args, "result": result}, rule.claims_path)
+        )
+    req = CheckOutputRequest(
+        customer_id=customer_id,
+        session_id=session_id,
+        mode=client.config.evidence_output_mode,
+        action_type=(rule.action_type or "") if rule is not None else "",
+        response_text=response_text,
+        facts=[FactRef(fact_id=fid) for fid in fact_ids],
+        output_claims=claims,
+    )
+    return req, session_id, customer_id
+
+
+def _extract_response_text(rule: EvidenceRule, tool_args: dict[str, Any], result: Any) -> str:
+    """Resolve the response text from a wrapped tool's result per the rule. With
+    no ``response_text`` path, the whole result is stringified."""
+    if rule.response_text:
+        val = extract_path({"args": tool_args, "result": result}, rule.response_text)
+        return "" if val is None else str(val)
+    return "" if result is None else str(result)
+
+
 def _record_obligations(session_id: str, customer_id: str, result: CheckActionResult) -> None:
     if result.obligations:
         _get_store().add_obligations(session_id, customer_id, [o.code for o in result.obligations])
@@ -261,6 +325,61 @@ def observe_source(
             store.put_fact(session_id, customer_id, field, fact.id)
 
 
+def guard_output(
+    client: BylawClient,
+    response_text: str,
+    *,
+    customer_id: str = "",
+    rule: EvidenceRule | None = None,
+    tool_args: dict[str, Any] | None = None,
+    result: Any = None,
+) -> CheckActionResult | None:
+    """Verify that the numbers in ``response_text`` are grounded (sync, Phase 4).
+
+    Reads ``client.config.evidence_output_mode`` (NOT ``evidence_mode``): output
+    enforcement is opt-in because a false positive blocks a legitimate answer.
+    ``observe`` records ``would_*`` and never raises; ``enforce`` raises
+    :class:`EvidenceBlockedError` on an ungrounded number, pausing on a review
+    for host-native resolution first. Returns the result (or ``None`` if skipped).
+    """
+    mode = client.config.evidence_output_mode
+    if mode == "off":
+        return None
+    if not response_text:
+        if mode == "enforce":
+            raise EvidenceError("evidence output enforcement requires non-empty response text")
+        logger.warning("evidence: empty response text for output guard; skipping")
+        return None
+    built = _build_output_request(client, rule, response_text, tool_args or {}, result, customer_id)
+    if built is None:
+        if mode == "enforce":
+            raise EvidenceError("evidence output enforcement requires customer id")
+        logger.warning("evidence: no customer id for output guard; skipping")
+        return None
+    req, session_id, resolved_customer = built
+    try:
+        result_check = client.check_output(req)
+    except EvidenceError as exc:
+        if mode == "enforce":
+            raise
+        logger.warning("evidence: check-output failed (observe, continuing): %s", exc)
+        return None
+    _record_obligations(session_id, resolved_customer, result_check)
+    if result_check.is_allowed:
+        return result_check
+    if mode != "enforce":
+        logger.info("evidence[observe]: would_%s output — %s", result_check.decision, result_check.reason)
+        return result_check
+    if result_check.decision == "review" and result_check.challenge is not None and _challenge_handler is not None:
+        resolution = _coerce_resolution(_challenge_handler(result_check.challenge))
+        final = client.resolve_challenge(_resolve_request(result_check.challenge, resolution))
+        _record_obligations(session_id, resolved_customer, final)
+        if final.is_allowed:
+            return final
+        _block(final)
+    _block(result_check)
+
+
 # ---------------------------------------------------------------------------
 # Async entry points
 # ---------------------------------------------------------------------------
@@ -293,6 +412,58 @@ async def aguard_action(client: BylawClient, rule: EvidenceRule, tool_args: dict
             return
         _block(final)
     _block(result)
+
+
+async def aguard_output(
+    client: BylawClient,
+    response_text: str,
+    *,
+    customer_id: str = "",
+    rule: EvidenceRule | None = None,
+    tool_args: dict[str, Any] | None = None,
+    result: Any = None,
+) -> CheckActionResult | None:
+    """Async :func:`guard_output`."""
+    mode = client.config.evidence_output_mode
+    if mode == "off":
+        return None
+    if not response_text:
+        if mode == "enforce":
+            raise EvidenceError("evidence output enforcement requires non-empty response text")
+        logger.warning("evidence: empty response text for output guard; skipping")
+        return None
+    built = _build_output_request(client, rule, response_text, tool_args or {}, result, customer_id)
+    if built is None:
+        if mode == "enforce":
+            raise EvidenceError("evidence output enforcement requires customer id")
+        logger.warning("evidence: no customer id for output guard; skipping")
+        return None
+    req, session_id, resolved_customer = built
+    try:
+        result_check = await client.acheck_output(req)
+    except EvidenceError as exc:
+        if mode == "enforce":
+            raise
+        logger.warning("evidence: check-output failed (observe, continuing): %s", exc)
+        return None
+    _record_obligations(session_id, resolved_customer, result_check)
+    if result_check.is_allowed:
+        return result_check
+    if mode != "enforce":
+        logger.info("evidence[observe]: would_%s output — %s", result_check.decision, result_check.reason)
+        return result_check
+    if result_check.decision == "review" and result_check.challenge is not None and _challenge_handler is not None:
+        resolution = _challenge_handler(result_check.challenge)
+        if inspect.isawaitable(resolution):
+            resolution = await resolution
+        final = await client.aresolve_challenge(
+            _resolve_request(result_check.challenge, _coerce_resolution(resolution))
+        )
+        _record_obligations(session_id, resolved_customer, final)
+        if final.is_allowed:
+            return final
+        _block(final)
+    _block(result_check)
 
 
 async def aobserve_source(
