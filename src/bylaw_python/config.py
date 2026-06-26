@@ -103,6 +103,17 @@ class VaultConfig(BaseSettings):
     on a deny. Host-native challenge resolution (review handling) is Phase 3.
     Env: ``BYLAW_EVIDENCE_MODE``."""
 
+    evidence_output_mode: str = "observe"
+    """Evidence enforcement mode for OUTPUT grounding — checking that financial
+    numbers in an agent's customer-facing response are grounded in registered
+    evidence (Phase 4). Separate from ``evidence_mode`` because output false
+    positives block legitimate *answers*, so output enforcement is opt-in:
+    ``"off"``: skip output guarding. ``"observe"`` (default): call check-output
+    and record ``would_*`` decisions but never block — replay-tune here first.
+    ``"enforce"``: raise :class:`EvidenceBlockedError` on an ungrounded number.
+    Enabling action ``evidence_mode="enforce"`` does NOT enable output enforce.
+    Env: ``BYLAW_EVIDENCE_OUTPUT_MODE``."""
+
     evidence_session_backend: str = "memory"
     """Backing store for the session evidence store. ``"memory"`` (V0 default).
     Redis/Postgres backends are a later add for multi-worker / hosted runs.

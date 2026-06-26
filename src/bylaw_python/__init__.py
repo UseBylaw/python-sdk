@@ -35,7 +35,13 @@ from .enforce import (
     tool,
     vault_enforce,
 )
-from .evidence import evidence_session, set_session_store
+from .evidence import (
+    aguard_output,
+    evidence_session,
+    guard_output,
+    set_challenge_handler,
+    set_session_store,
+)
 from .manifest import EvidenceRule, Manifest, ManifestRule, load_manifest
 from .session_store import InMemorySessionStore, SessionEvidenceStore
 from .exceptions import (
@@ -54,12 +60,17 @@ from .exceptions import (
 from .pending import PendingApproval
 from .webhook import verify_webhook
 from .models import (
+    Challenge,
+    ChallengeResolution,
     CheckActionRequest,
     CheckActionResult,
+    CheckOutputRequest,
     ClearanceRequest,
     ClearanceResponse,
     ConsistencyProof,
     EvidenceGraph,
+    OutputClaim,
+    ResolveChallengeRequest,
     InclusionProof,
     LedgerCheckpoint,
     LedgerEntry,
@@ -73,7 +84,7 @@ from .models import (
     RegisteredFact,
 )
 
-__version__ = "0.6.0"
+__version__ = "0.5.1"
 
 __all__ = [
     # Core
@@ -94,10 +105,19 @@ __all__ = [
     # Evidence runtime (Phase 2)
     "evidence_session",
     "set_session_store",
+    "set_challenge_handler",
     "InMemorySessionStore",
     "SessionEvidenceStore",
+    # Output grounding (Phase 4)
+    "guard_output",
+    "aguard_output",
+    "CheckOutputRequest",
+    "OutputClaim",
     "CheckActionRequest",
     "CheckActionResult",
+    "Challenge",
+    "ChallengeResolution",
+    "ResolveChallengeRequest",
     "EvidenceGraph",
     "RegisterFactRequest",
     "RegisteredFact",

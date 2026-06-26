@@ -20,13 +20,23 @@ class EvidenceRule:
     or a protected *action* (it is gated by a ``check-action`` call).
 
     Attributes:
-        kind: ``"source"`` or ``"action"``.
+        kind: ``"source"``, ``"action"``, or ``"output"``.
         customer_id: Dotted path to the customer id, e.g. ``"args.customer_id"``
             (resolved against ``{"args": ..., "result": ...}``).
         fields: For sources — ``{evidence_field: result_jsonpath}``.
         source_type: For sources — the contract source type (e.g. ``"profile"``).
-        action_type: For actions — the canonical action type.
-        requires: For actions — which session fields to attach as fact refs.
+        action_type: For actions/outputs — the canonical action type.
+        requires: For actions/outputs — which session fields to attach as fact refs.
+        response_text: For outputs — dotted path to the response text in the
+            wrapped tool's result; ``None`` means stringify the whole result.
+        claims_path: For outputs — dotted path to a list of declared output
+            claims in the result (optional escape hatch).
+        inferred: For sources — mark facts from this tool as *inferred* (derived
+            or guessed, not directly observed). The gate holds an inferred fact
+            for review before it backs a sensitive action.
+        threshold_args: For actions — arg keys to forward into the check-action
+            ``context`` so the gate can apply numeric arg-threshold rules. Empty
+            forwards all of the wrapped tool's args.
     """
 
     kind: str
@@ -35,11 +45,15 @@ class EvidenceRule:
     source_type: str | None = None
     action_type: str | None = None
     requires: tuple[str, ...] = ()
+    response_text: str | None = None
+    claims_path: str | None = None
+    inferred: bool = False
+    threshold_args: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         kind = self.kind.strip().lower()
-        if kind not in {"source", "action"}:
-            raise ValueError("evidence kind must be one of: source, action")
+        if kind not in {"source", "action", "output"}:
+            raise ValueError("evidence kind must be one of: source, action, output")
         object.__setattr__(self, "kind", kind)
 
 
@@ -162,6 +176,10 @@ def _parse_evidence(raw: dict[str, Any] | None) -> EvidenceRule | None:
         source_type=raw.get("source_type"),
         action_type=raw.get("action_type"),
         requires=tuple(raw.get("requires") or ()),
+        response_text=raw.get("response_text"),
+        claims_path=raw.get("claims_path"),
+        inferred=bool(raw.get("inferred", False)),
+        threshold_args=tuple(raw.get("threshold_args") or ()),
     )
 
 
