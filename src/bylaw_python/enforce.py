@@ -8,6 +8,7 @@ import contextvars
 import functools
 import importlib
 import inspect
+import logging
 import pkgutil
 import sys
 import types
@@ -16,12 +17,22 @@ from typing import Any, Callable, TypeVar
 
 from .client import BylawClient
 from .config import VaultConfig
+from .evidence import (
+    _active_session,
+    _configure_session_store,
+    aguard_action,
+    aobserve_source,
+    guard_action,
+    observe_source,
+)
 from .exceptions import ClearanceDeniedError, ReviewPendingError
-from .manifest import Manifest, ManifestRule, load_manifest
+from .manifest import EvidenceRule, Manifest, ManifestRule, load_manifest
 from .models import ClearanceRequest, ClearanceResponse
 from .pending import PendingApproval
 
 F = TypeVar("F", bound=Callable[..., Any])
+
+_evidence_log = logging.getLogger("bylaw.evidence")
 
 # ---------------------------------------------------------------------------
 # Global singleton & context variable
@@ -58,6 +69,7 @@ def configure(config: VaultConfig | None = None, **kwargs: Any) -> BylawClient:
     global _default_client
     if config is None:
         config = VaultConfig(**kwargs)
+    _configure_session_store(config.evidence_session_backend)
     _default_client = BylawClient(config)
     return _default_client
 
@@ -188,6 +200,7 @@ def _wrap_with_rule(func: F, name: str, rule: ManifestRule) -> F:
         tool_name=name,
         policy_id=rule.policy_id,
         context=rule.context if rule.context else None,
+        evidence=rule.evidence,
     )(func)
 
 
@@ -239,6 +252,7 @@ def tool(
         resolved_name = tool_name or f.__name__
         resolved_policy = policy_id
         resolved_context: dict[str, Any] = dict(context or {})
+        resolved_evidence: EvidenceRule | None = None
 
         # Apply manifest rule if available, explicit kwargs take precedence.
         if _manifest is not None:
@@ -247,11 +261,13 @@ def tool(
                 if resolved_policy is None:
                     resolved_policy = rule.policy_id
                 resolved_context = {**rule.context, **resolved_context}
+                resolved_evidence = rule.evidence
 
         return enforce(
             tool_name=resolved_name,
             policy_id=resolved_policy,
             context=resolved_context or None,
+            evidence=resolved_evidence,
             data_categories=data_categories,
             purpose=purpose,
             processing_register_ref=processing_register_ref,
@@ -275,6 +291,7 @@ def enforce(
     policy_id: str | None = None,
     context: dict[str, Any] | None = None,
     on_review_pending: Callable[[PendingApproval], None] | None = None,
+    evidence: EvidenceRule | None = None,
     # Phase 2 — GDPR Article 30 processing-register matching.
     data_categories: list[str] | None = None,
     purpose: str | None = None,
@@ -310,34 +327,58 @@ def enforce(
 
     def decorator(func: F) -> F:
         resolved_name = tool_name or func.__name__
+        # Clearance runs for plain enforce()/clearance rules. An evidence-only
+        # rule skips clearance unless policy context still requires it.
+        has_policy_context = policy_id is not None or bool((context or {}).get("policy_id"))
+        do_clearance = evidence is None or has_policy_context
+        ev_action = evidence is not None and evidence.kind == "action"
+        ev_source = evidence is not None and evidence.kind == "source"
+
+        def _build_request(client: BylawClient, tool_args: dict[str, Any]) -> ClearanceRequest:
+            return ClearanceRequest(
+                tool_name=resolved_name,
+                tool_args=tool_args,
+                agent_id=client.config.agent_id,
+                session_id=_active_session(client)[0],
+                context={**(context or {}), **({"policy_id": policy_id} if policy_id else {})},
+                data_categories=data_categories,
+                purpose=purpose,
+                processing_register_ref=processing_register_ref,
+                dataset_ref=dataset_ref,
+            )
 
         if inspect.iscoroutinefunction(func):
 
             @functools.wraps(func)
             async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
                 client = _get_default_client()
-                request = ClearanceRequest(
-                    tool_name=resolved_name,
-                    tool_args=_extract_tool_args(func, args, kwargs),
-                    agent_id=client.config.agent_id,
-                    session_id=client.config.session_id,
-                    context={**(context or {}), **({"policy_id": policy_id} if policy_id else {})},
-                    data_categories=data_categories,
-                    purpose=purpose,
-                    processing_register_ref=processing_register_ref,
-                    dataset_ref=dataset_ref,
-                )
-                try:
-                    clearance = await client.arequest_clearance(request)
-                except ReviewPendingError as exc:
-                    if on_review_pending is not None:
-                        on_review_pending(exc.pending_approval)
-                    raise
+                tool_args = _extract_tool_args(func, args, kwargs)
+                evidence_on = client.config.evidence_mode != "off"
+
+                clearance: ClearanceResponse | None = None
+                if do_clearance:
+                    try:
+                        clearance = await client.arequest_clearance(_build_request(client, tool_args))
+                    except ReviewPendingError as exc:
+                        if on_review_pending is not None:
+                            on_review_pending(exc.pending_approval)
+                        raise
+
+                if ev_action and evidence_on:
+                    await aguard_action(client, evidence, tool_args)
+
                 token = _current_clearance.set(clearance)
                 try:
-                    return await func(*args, **kwargs)
+                    result = await func(*args, **kwargs)
                 finally:
                     _current_clearance.reset(token)
+
+                if ev_source and evidence_on:
+                    try:
+                        await aobserve_source(client, evidence, tool_args, result)
+                    except Exception:  # observation must never break the agent
+                        _evidence_log.warning("evidence: source observation failed", exc_info=True)
+                return result
 
             return async_wrapper  # type: ignore[return-value]
 
@@ -346,28 +387,33 @@ def enforce(
             @functools.wraps(func)
             def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
                 client = _get_default_client()
-                request = ClearanceRequest(
-                    tool_name=resolved_name,
-                    tool_args=_extract_tool_args(func, args, kwargs),
-                    agent_id=client.config.agent_id,
-                    session_id=client.config.session_id,
-                    context={**(context or {}), **({"policy_id": policy_id} if policy_id else {})},
-                    data_categories=data_categories,
-                    purpose=purpose,
-                    processing_register_ref=processing_register_ref,
-                    dataset_ref=dataset_ref,
-                )
-                try:
-                    clearance = client.request_clearance(request)
-                except ReviewPendingError as exc:
-                    if on_review_pending is not None:
-                        on_review_pending(exc.pending_approval)
-                    raise
+                tool_args = _extract_tool_args(func, args, kwargs)
+                evidence_on = client.config.evidence_mode != "off"
+
+                clearance: ClearanceResponse | None = None
+                if do_clearance:
+                    try:
+                        clearance = client.request_clearance(_build_request(client, tool_args))
+                    except ReviewPendingError as exc:
+                        if on_review_pending is not None:
+                            on_review_pending(exc.pending_approval)
+                        raise
+
+                if ev_action and evidence_on:
+                    guard_action(client, evidence, tool_args)
+
                 token = _current_clearance.set(clearance)
                 try:
-                    return func(*args, **kwargs)
+                    result = func(*args, **kwargs)
                 finally:
                     _current_clearance.reset(token)
+
+                if ev_source and evidence_on:
+                    try:
+                        observe_source(client, evidence, tool_args, result)
+                    except Exception:  # observation must never break the agent
+                        _evidence_log.warning("evidence: source observation failed", exc_info=True)
+                return result
 
             return sync_wrapper  # type: ignore[return-value]
 

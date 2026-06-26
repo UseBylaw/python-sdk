@@ -13,6 +13,37 @@ MANIFEST_FILENAMES = ("bylaw.yaml", "bylaw.yml", "bylaw.json")
 
 
 @dataclass(frozen=True)
+class EvidenceRule:
+    """Evidence-layer configuration for a matched tool (Phase 2).
+
+    A tool is either a *source* (its result is extracted into evidence facts)
+    or a protected *action* (it is gated by a ``check-action`` call).
+
+    Attributes:
+        kind: ``"source"`` or ``"action"``.
+        customer_id: Dotted path to the customer id, e.g. ``"args.customer_id"``
+            (resolved against ``{"args": ..., "result": ...}``).
+        fields: For sources — ``{evidence_field: result_jsonpath}``.
+        source_type: For sources — the contract source type (e.g. ``"profile"``).
+        action_type: For actions — the canonical action type.
+        requires: For actions — which session fields to attach as fact refs.
+    """
+
+    kind: str
+    customer_id: str | None = None
+    fields: dict[str, str] = field(default_factory=dict)
+    source_type: str | None = None
+    action_type: str | None = None
+    requires: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        kind = self.kind.strip().lower()
+        if kind not in {"source", "action"}:
+            raise ValueError("evidence kind must be one of: source, action")
+        object.__setattr__(self, "kind", kind)
+
+
+@dataclass(frozen=True)
 class ManifestRule:
     """A single enforcement rule declared in the manifest.
 
@@ -20,11 +51,13 @@ class ManifestRule:
         tool: Glob pattern matched against function names (e.g. ``"stripe_*"``).
         policy_id: Policy to enforce for matching tools.
         context: Extra key/value pairs forwarded to the clearance request context.
+        evidence: Optional evidence-layer configuration (Phase 2).
     """
 
     tool: str
     policy_id: str | None = None
     context: dict[str, Any] = field(default_factory=dict)
+    evidence: EvidenceRule | None = None
 
     def matches(self, name: str) -> bool:
         """Return ``True`` if *name* matches this rule's glob pattern."""
@@ -111,10 +144,25 @@ def load_manifest(
             tool=entry["tool"],
             policy_id=entry.get("policy_id"),
             context=entry.get("context") or {},
+            evidence=_parse_evidence(entry.get("evidence")),
         )
         for entry in data.get("enforce", [])
     ]
     return Manifest(rules=rules, source=src_label)
+
+
+def _parse_evidence(raw: dict[str, Any] | None) -> EvidenceRule | None:
+    """Parse an optional ``evidence`` block on an enforce entry."""
+    if raw is None:
+        return None
+    return EvidenceRule(
+        kind=raw.get("kind", ""),
+        customer_id=raw.get("customer_id"),
+        fields=dict(raw.get("fields") or {}),
+        source_type=raw.get("source_type"),
+        action_type=raw.get("action_type"),
+        requires=tuple(raw.get("requires") or ()),
+    )
 
 
 # ---------------------------------------------------------------------------

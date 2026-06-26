@@ -328,3 +328,121 @@ class LedgerVerificationResult(BaseModel):
     latest_manifest_hash: str | None = None
     coverage_note: str | None = None
     error: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Evidence runtime (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+class RegisterFactRequest(BaseModel):
+    """Request to register an evidence fact extracted from a source tool result."""
+
+    customer_id: str
+    session_id: str = ""
+    field: str
+    value: Any = None
+    source_type: str
+    source_id: str = ""
+    source_actor: str = ""
+    scope: str = ""
+    authority_level: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class RegisteredFact(BaseModel):
+    """Vault response after registering a fact (value never returned raw)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = ""
+    customer_id_hash: str = ""
+    session_id: str = ""
+    field: str = ""
+    source_type: str = ""
+    scope: str = ""
+    authority_level: str = ""
+
+
+class FactRef(BaseModel):
+    fact_id: str
+
+
+class EvidenceObligation(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    code: str
+    fact_id: str = ""
+    field: str = ""
+    reason: str = ""
+
+
+class EvidenceConflict(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    field: str = ""
+    conflict_type: str = ""
+    status: str = ""
+    fact_id_a: str = ""
+    fact_id_b: str = ""
+
+
+class CheckActionRequest(BaseModel):
+    """Request to evaluate a protected action against current evidence."""
+
+    customer_id: str = ""
+    session_id: str = ""
+    mode: str = ""
+    action_type: str
+    workflow: str = ""
+    facts: list[FactRef] = Field(default_factory=list)
+    obligations: list[str] = Field(default_factory=list)
+    current_turn: int = 0
+
+
+class CheckActionResult(BaseModel):
+    """Vault decision for a check-action / check-output call."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    check_id: str = ""
+    receipt_id: str = ""
+    action_type: str = ""
+    customer_id_hash: str = ""
+    decision: str = "deny"
+    reason: str = ""
+    mode: str = ""
+    policy_version: str = ""
+    matched_rules: list[str] = Field(default_factory=list)
+    obligations: list[EvidenceObligation] = Field(default_factory=list)
+    conflicts: list[EvidenceConflict] = Field(default_factory=list)
+
+    @property
+    def is_allowed(self) -> bool:
+        return self.decision in ("allow", "allow_with_obligations")
+
+
+class GraphFact(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    fact_id: str = ""
+    field: str = ""
+    value_redacted: str = ""
+    source_type: str = ""
+    session_id: str = ""
+    authority_level: str = ""
+    scope: str = ""
+    expired: bool = False
+    in_conflict: bool = False
+
+
+class EvidenceGraph(BaseModel):
+    """Current evidence facts for a customer/session (GET /v1/evidence/graph)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    customer_id_hash: str = ""
+    session_id: str = ""
+    policy_version: str = ""
+    facts: list[GraphFact] = Field(default_factory=list)
+    conflicts: list[EvidenceConflict] = Field(default_factory=list)

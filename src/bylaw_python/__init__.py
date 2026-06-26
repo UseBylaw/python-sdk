@@ -35,9 +35,13 @@ from .enforce import (
     tool,
     vault_enforce,
 )
-from .manifest import Manifest, ManifestRule, load_manifest
+from .evidence import evidence_session, set_session_store
+from .manifest import EvidenceRule, Manifest, ManifestRule, load_manifest
+from .session_store import InMemorySessionStore, SessionEvidenceStore
 from .exceptions import (
     ClearanceDeniedError,
+    EvidenceBlockedError,
+    EvidenceError,
     ManualReviewTimeoutError,
     PolicyRegistrationError,
     BylawError,
@@ -50,9 +54,12 @@ from .exceptions import (
 from .pending import PendingApproval
 from .webhook import verify_webhook
 from .models import (
+    CheckActionRequest,
+    CheckActionResult,
     ClearanceRequest,
     ClearanceResponse,
     ConsistencyProof,
+    EvidenceGraph,
     InclusionProof,
     LedgerCheckpoint,
     LedgerEntry,
@@ -62,9 +69,11 @@ from .models import (
     LedgerVerificationResult,
     PolicyRegistration,
     PolicyRegistrationResponse,
+    RegisterFactRequest,
+    RegisteredFact,
 )
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 __all__ = [
     # Core
@@ -81,6 +90,17 @@ __all__ = [
     "load_manifest",
     "Manifest",
     "ManifestRule",
+    "EvidenceRule",
+    # Evidence runtime (Phase 2)
+    "evidence_session",
+    "set_session_store",
+    "InMemorySessionStore",
+    "SessionEvidenceStore",
+    "CheckActionRequest",
+    "CheckActionResult",
+    "EvidenceGraph",
+    "RegisterFactRequest",
+    "RegisteredFact",
     # Explicit API
     "vault_enforce",
     "VaultContext",
@@ -111,4 +131,6 @@ __all__ = [
     "TokenVerificationError",
     "ReplayDetectedError",
     "PolicyRegistrationError",
+    "EvidenceError",
+    "EvidenceBlockedError",
 ]
