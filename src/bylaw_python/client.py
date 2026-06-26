@@ -60,12 +60,15 @@ def _parse_retry_after(value: str | None) -> float | None:
     return min(secs, MAX_RETRY_AFTER_SECONDS)
 from .pending import PendingApproval
 from .models import (
+    Challenge,
     CheckActionRequest,
     CheckActionResult,
+    CheckOutputRequest,
     ClearanceRequest,
     ClearanceResponse,
     ConsistencyProof,
     EvidenceGraph,
+    ResolveChallengeRequest,
     InclusionProof,
     LedgerEntry,
     LedgerCheckpoint,
@@ -653,6 +656,92 @@ class BylawClient:
             response = await self._async_retry(
                 lambda: self._get_async_client().post(
                     "/v1/evidence/check-action", content=request.model_dump_json()
+                )
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise EvidenceError(
+                f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
+            ) from exc
+        return CheckActionResult.model_validate(response.json())
+
+    def check_output(self, request: CheckOutputRequest) -> CheckActionResult:
+        """Verify the numbers in a customer-facing response are grounded (sync)."""
+        try:
+            response = self._sync_retry(
+                lambda: self._get_sync_client().post(
+                    "/v1/evidence/check-output", content=request.model_dump_json()
+                )
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise EvidenceError(
+                f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
+            ) from exc
+        return CheckActionResult.model_validate(response.json())
+
+    async def acheck_output(self, request: CheckOutputRequest) -> CheckActionResult:
+        """Verify the numbers in a customer-facing response are grounded (async)."""
+        try:
+            response = await self._async_retry(
+                lambda: self._get_async_client().post(
+                    "/v1/evidence/check-output", content=request.model_dump_json()
+                )
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise EvidenceError(
+                f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
+            ) from exc
+        return CheckActionResult.model_validate(response.json())
+
+    def fetch_challenge(self, challenge_id: str) -> Challenge:
+        """Fetch a host-native challenge to render (sync)."""
+        try:
+            response = self._sync_retry(
+                lambda: self._get_sync_client().get(f"/v1/evidence/challenges/{challenge_id}")
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise EvidenceError(
+                f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
+            ) from exc
+        return Challenge.model_validate(response.json())
+
+    async def afetch_challenge(self, challenge_id: str) -> Challenge:
+        """Fetch a host-native challenge to render (async)."""
+        try:
+            response = await self._async_retry(
+                lambda: self._get_async_client().get(f"/v1/evidence/challenges/{challenge_id}")
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise EvidenceError(
+                f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
+            ) from exc
+        return Challenge.model_validate(response.json())
+
+    def resolve_challenge(self, request: ResolveChallengeRequest) -> CheckActionResult:
+        """Post a trusted decision event to resolve a challenge (sync)."""
+        try:
+            response = self._sync_retry(
+                lambda: self._get_sync_client().post(
+                    "/v1/evidence/resolve-challenge", content=request.model_dump_json()
+                )
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise EvidenceError(
+                f"Vault returned HTTP {exc.response.status_code}: {exc.response.text}"
+            ) from exc
+        return CheckActionResult.model_validate(response.json())
+
+    async def aresolve_challenge(self, request: ResolveChallengeRequest) -> CheckActionResult:
+        """Post a trusted decision event to resolve a challenge (async)."""
+        try:
+            response = await self._async_retry(
+                lambda: self._get_async_client().post(
+                    "/v1/evidence/resolve-challenge", content=request.model_dump_json()
                 )
             )
             response.raise_for_status()

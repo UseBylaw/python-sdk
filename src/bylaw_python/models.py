@@ -347,6 +347,7 @@ class RegisterFactRequest(BaseModel):
     source_actor: str = ""
     scope: str = ""
     authority_level: str = ""
+    is_inferred: bool = False
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -398,6 +399,91 @@ class CheckActionRequest(BaseModel):
     facts: list[FactRef] = Field(default_factory=list)
     obligations: list[str] = Field(default_factory=list)
     current_turn: int = 0
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
+class OutputClaim(BaseModel):
+    """A caller-declared provenance hint for a number in the response text.
+
+    Optional — Vault grounds numbers deterministically against registered facts
+    and contract formulas regardless. A declared claim is only an escape-hatch
+    rung that must still reference a real authoritative fact to bind.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    claim_text: str = ""
+    claim_type: str = ""
+    source_fact_id: str = ""
+    source_type: str = ""
+    source_field: str = ""
+    value: str = ""
+
+
+class CheckOutputRequest(BaseModel):
+    """Request to verify that the numbers in an agent's customer-facing response
+    are grounded in registered evidence (Phase 4 output grounding)."""
+
+    customer_id: str = ""
+    session_id: str = ""
+    mode: str = ""
+    action_type: str = ""
+    workflow: str = ""
+    response_text: str = ""
+    facts: list[FactRef] = Field(default_factory=list)
+    output_claims: list[OutputClaim] = Field(default_factory=list)
+    current_turn: int = 0
+
+
+class ChallengeSource(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    fact_id: str = ""
+    field: str = ""
+    source_type: str = ""
+    value_redacted: str = ""
+    authority_level: str = ""
+
+
+class Challenge(BaseModel):
+    """A host-native challenge to render in the host's own UI (Phase 3)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    challenge_id: str = ""
+    check_id: str = ""
+    action_type: str = ""
+    customer_id_hash: str = ""
+    reason: str = ""
+    field: str = ""
+    current_value_redacted: str = ""
+    proposed_value_redacted: str = ""
+    source_summaries: list[ChallengeSource] = Field(default_factory=list)
+    allowed_resolutions: list[str] = Field(default_factory=list)
+    required_resolver_role: str = ""
+    status: str = ""
+    original_action_reference: str = ""
+    challenge_token: str = ""
+
+
+class ChallengeResolution(BaseModel):
+    """The host's decision for a challenge, returned by the challenge handler."""
+
+    selected_resolution: str
+    resolved_by: str
+    resolver_role: str = ""
+
+
+class ResolveChallengeRequest(BaseModel):
+    """Trusted decision event posted to /v1/evidence/resolve-challenge."""
+
+    challenge_id: str
+    challenge_token: str
+    selected_resolution: str
+    resolved_by: str
+    resolver_role: str = ""
+    field: str = ""
+    value: str = ""
 
 
 class CheckActionResult(BaseModel):
@@ -416,6 +502,7 @@ class CheckActionResult(BaseModel):
     matched_rules: list[str] = Field(default_factory=list)
     obligations: list[EvidenceObligation] = Field(default_factory=list)
     conflicts: list[EvidenceConflict] = Field(default_factory=list)
+    challenge: Challenge | None = None
 
     @property
     def is_allowed(self) -> bool:
