@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bylaw-python"
-version = "0.5.0"
+version = "0.5.1"
 description = "Agent-agnostic compliance shim for SOX 404 policy enforcement via the ALCV Vault"
 readme = "README.md"
 license = { text = "MIT" }
