@@ -400,6 +400,57 @@ class CheckActionRequest(BaseModel):
     current_turn: int = 0
 
 
+class ChallengeSource(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    fact_id: str = ""
+    field: str = ""
+    source_type: str = ""
+    value_redacted: str = ""
+    authority_level: str = ""
+
+
+class Challenge(BaseModel):
+    """A host-native challenge to render in the host's own UI (Phase 3)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    challenge_id: str = ""
+    check_id: str = ""
+    action_type: str = ""
+    customer_id_hash: str = ""
+    reason: str = ""
+    field: str = ""
+    current_value_redacted: str = ""
+    proposed_value_redacted: str = ""
+    source_summaries: list[ChallengeSource] = Field(default_factory=list)
+    allowed_resolutions: list[str] = Field(default_factory=list)
+    required_resolver_role: str = ""
+    status: str = ""
+    original_action_reference: str = ""
+    challenge_token: str = ""
+
+
+class ChallengeResolution(BaseModel):
+    """The host's decision for a challenge, returned by the challenge handler."""
+
+    selected_resolution: str
+    resolved_by: str
+    resolver_role: str = ""
+
+
+class ResolveChallengeRequest(BaseModel):
+    """Trusted decision event posted to /v1/evidence/resolve-challenge."""
+
+    challenge_id: str
+    challenge_token: str
+    selected_resolution: str
+    resolved_by: str
+    resolver_role: str = ""
+    field: str = ""
+    value: str = ""
+
+
 class CheckActionResult(BaseModel):
     """Vault decision for a check-action / check-output call."""
 
@@ -416,6 +467,7 @@ class CheckActionResult(BaseModel):
     matched_rules: list[str] = Field(default_factory=list)
     obligations: list[EvidenceObligation] = Field(default_factory=list)
     conflicts: list[EvidenceConflict] = Field(default_factory=list)
+    challenge: Challenge | None = None
 
     @property
     def is_allowed(self) -> bool:

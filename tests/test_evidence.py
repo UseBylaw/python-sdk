@@ -10,6 +10,7 @@ from httpx import ConnectError, Response
 
 import bylaw_python as bylaw
 from bylaw_python import VaultConfig
+from bylaw_python import ChallengeResolution, set_challenge_handler
 from bylaw_python.enforce import enforce
 from bylaw_python.evidence import set_session_store
 from bylaw_python.exceptions import EvidenceBlockedError
@@ -34,8 +35,10 @@ def _config(mode: str = "observe") -> VaultConfig:
 @pytest.fixture(autouse=True)
 def fresh_session_store():
     set_session_store(InMemorySessionStore())
+    set_challenge_handler(None)
     yield
     set_session_store(None)
+    set_challenge_handler(None)
 
 
 def _facts_side_effect(request) -> Response:
@@ -410,4 +413,116 @@ def test_client_evidence_methods():
     assert res.is_allowed
     graph = client.fetch_evidence_graph("c1", "sess_1")
     assert len(graph.facts) == 1 and graph.facts[0].fact_id == "fact_1"
+    client.close()
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — host-native challenges (enforce mode pause -> resolve -> resume)
+# ---------------------------------------------------------------------------
+
+_REVIEW_CHALLENGE = {
+    "decision": "review",
+    "reason": "evidence facts disagree across sources",
+    "action_type": "generate_share_recommendation",
+    "challenge": {
+        "challenge_id": "ech_1",
+        "challenge_token": "tok.sig",
+        "field": "date_of_birth",
+        "allowed_resolutions": ["use_profile_value", "deny_action"],
+    },
+}
+
+
+@respx.mock
+def test_enforce_review_invokes_handler_then_resumes():
+    bylaw.configure(_config("enforce"))
+    respx.post("https://vault.test/v1/evidence/check-action").mock(
+        return_value=Response(200, json=_REVIEW_CHALLENGE)
+    )
+    resolve = respx.post("https://vault.test/v1/evidence/resolve-challenge").mock(
+        return_value=Response(200, json={"decision": "allow", "reason": "challenge resolved"})
+    )
+    seen = {}
+
+    def handler(ch):
+        seen["id"] = ch.challenge_id
+        return ChallengeResolution(selected_resolution="use_profile_value", resolved_by="advisor@x", resolver_role="advisor")
+
+    set_challenge_handler(handler)
+    ran = {"v": False}
+
+    @enforce(tool_name="recommend", evidence=ACTION_RULE)
+    def recommend(customer_id: str):
+        ran["v"] = True
+        return "ok"
+
+    assert recommend(customer_id="cust_42") == "ok"
+    assert seen["id"] == "ech_1"
+    assert ran["v"] is True
+    body = json.loads(resolve.calls.last.request.content)
+    assert body["selected_resolution"] == "use_profile_value"
+    assert body["challenge_token"] == "tok.sig"
+
+
+@respx.mock
+def test_enforce_review_deny_blocks_the_tool():
+    bylaw.configure(_config("enforce"))
+    respx.post("https://vault.test/v1/evidence/check-action").mock(
+        return_value=Response(200, json=_REVIEW_CHALLENGE)
+    )
+    respx.post("https://vault.test/v1/evidence/resolve-challenge").mock(
+        return_value=Response(200, json={"decision": "deny", "reason": "advisor denied", "receipt_id": "r1"})
+    )
+    set_challenge_handler(lambda ch: {"selected_resolution": "deny_action", "resolved_by": "advisor@x"})
+    ran = {"v": False}
+
+    @enforce(tool_name="recommend", evidence=ACTION_RULE)
+    def recommend(customer_id: str):
+        ran["v"] = True
+        return "ok"
+
+    with pytest.raises(EvidenceBlockedError):
+        recommend(customer_id="cust_42")
+    assert ran["v"] is False
+
+
+@respx.mock
+def test_observe_review_does_not_invoke_handler():
+    bylaw.configure(_config("observe"))
+    respx.post("https://vault.test/v1/evidence/check-action").mock(
+        return_value=Response(200, json=_REVIEW_CHALLENGE)
+    )
+    called = {"v": False}
+
+    def handler(ch):
+        called["v"] = True
+        return {"selected_resolution": "use_profile_value", "resolved_by": "x"}
+
+    set_challenge_handler(handler)
+
+    @enforce(tool_name="recommend", evidence=ACTION_RULE)
+    def recommend(customer_id: str):
+        return "ok"
+
+    assert recommend(customer_id="cust_42") == "ok"  # observe never blocks
+    assert called["v"] is False  # and never invokes the host handler
+
+
+@respx.mock
+def test_client_resolve_and_fetch_challenge():
+    from bylaw_python import BylawClient, ResolveChallengeRequest
+
+    client = BylawClient(_config())
+    respx.get("https://vault.test/v1/evidence/challenges/ech_1").mock(
+        return_value=Response(200, json={"challenge_id": "ech_1", "field": "date_of_birth", "allowed_resolutions": ["use_profile_value"]})
+    )
+    respx.post("https://vault.test/v1/evidence/resolve-challenge").mock(
+        return_value=Response(200, json={"decision": "allow", "reason": "ok"})
+    )
+    ch = client.fetch_challenge("ech_1")
+    assert ch.challenge_id == "ech_1"
+    res = client.resolve_challenge(ResolveChallengeRequest(
+        challenge_id="ech_1", challenge_token="t.s", selected_resolution="use_profile_value", resolved_by="advisor"
+    ))
+    assert res.is_allowed
     client.close()

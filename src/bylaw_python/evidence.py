@@ -10,23 +10,74 @@ from __future__ import annotations
 
 import contextlib
 import contextvars
+import inspect
 import logging
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 from .client import BylawClient
 from .exceptions import EvidenceBlockedError, EvidenceError, VaultConnectionError
 from .jsonpath import extract_path
 from .manifest import EvidenceRule
-from .models import CheckActionRequest, CheckActionResult, FactRef, RegisterFactRequest
+from .models import (
+    Challenge,
+    ChallengeResolution,
+    CheckActionRequest,
+    CheckActionResult,
+    FactRef,
+    RegisterFactRequest,
+    ResolveChallengeRequest,
+)
 from .session_store import InMemorySessionStore, SessionEvidenceStore
 
 logger = logging.getLogger("bylaw.evidence")
+
+# A challenge handler renders the challenge in the HOST's UI and returns the
+# chosen resolution. It may be sync or async.
+ChallengeHandler = Callable[[Challenge], Any]
 
 _session_ctx: contextvars.ContextVar[tuple[str, str] | None] = contextvars.ContextVar(
     "_bylaw_evidence_session", default=None
 )
 _store: SessionEvidenceStore | None = None
 _store_backend: str | None = None
+_challenge_handler: ChallengeHandler | None = None
+
+
+def set_challenge_handler(handler: ChallengeHandler | None) -> None:
+    """Register the host challenge handler (Phase 3).
+
+    In enforce mode, when a protected action needs human judgment the SDK calls
+    this handler with the :class:`Challenge`; the host renders it in its own UI
+    and returns a :class:`ChallengeResolution` (or a dict / 3-tuple). The SDK
+    then resolves the challenge and resumes (allow) or blocks (deny).
+    """
+    global _challenge_handler
+    _challenge_handler = handler
+
+
+def _coerce_resolution(value: Any) -> ChallengeResolution:
+    if isinstance(value, ChallengeResolution):
+        return value
+    if isinstance(value, dict):
+        return ChallengeResolution(**value)
+    if isinstance(value, (tuple, list)):
+        return ChallengeResolution(
+            selected_resolution=value[0],
+            resolved_by=value[1] if len(value) > 1 else "host",
+            resolver_role=value[2] if len(value) > 2 else "",
+        )
+    raise EvidenceError("challenge handler must return a ChallengeResolution, dict, or tuple")
+
+
+def _resolve_request(challenge: Challenge, resolution: ChallengeResolution) -> ResolveChallengeRequest:
+    return ResolveChallengeRequest(
+        challenge_id=challenge.challenge_id,
+        challenge_token=challenge.challenge_token,
+        selected_resolution=resolution.selected_resolution,
+        resolved_by=resolution.resolved_by,
+        resolver_role=resolution.resolver_role,
+        field=challenge.field,
+    )
 
 
 def _normalize_backend(backend: str | None) -> str:
@@ -143,18 +194,13 @@ def _build_action_request(
     return req, session_id, customer_id
 
 
-def _apply_action_result(
-    client: BylawClient, session_id: str, customer_id: str, result: CheckActionResult
-) -> None:
-    mode = client.config.evidence_mode
-    store = _get_store(client.config.evidence_session_backend)
+def _record_obligations(session_id: str, customer_id: str, result: CheckActionResult) -> None:
     if result.obligations:
-        store.add_obligations(session_id, customer_id, [o.code for o in result.obligations])
-    if result.is_allowed:
-        return
-    if mode == "enforce":
-        raise EvidenceBlockedError(result.reason, result.decision, result.receipt_id)
-    logger.info("evidence[observe]: would_%s %s — %s", result.decision, result.action_type, result.reason)
+        _get_store().add_obligations(session_id, customer_id, [o.code for o in result.obligations])
+
+
+def _block(result: CheckActionResult) -> None:
+    raise EvidenceBlockedError(result.reason, result.decision, result.receipt_id)
 
 
 # ---------------------------------------------------------------------------
@@ -173,7 +219,21 @@ def guard_action(client: BylawClient, rule: EvidenceRule, tool_args: dict[str, A
             raise
         logger.warning("evidence: check-action failed (observe, continuing): %s", exc)
         return
-    _apply_action_result(client, session_id, customer_id, result)
+    _record_obligations(session_id, customer_id, result)
+    if result.is_allowed:
+        return
+    if client.config.evidence_mode != "enforce":
+        logger.info("evidence[observe]: would_%s %s — %s", result.decision, result.action_type, result.reason)
+        return
+    # Enforce: a review pauses for host-native resolution, then resumes (R3.9).
+    if result.decision == "review" and result.challenge is not None and _challenge_handler is not None:
+        resolution = _coerce_resolution(_challenge_handler(result.challenge))
+        final = client.resolve_challenge(_resolve_request(result.challenge, resolution))
+        _record_obligations(session_id, customer_id, final)
+        if final.is_allowed:
+            return
+        _block(final)
+    _block(result)
 
 
 def observe_source(
@@ -217,7 +277,22 @@ async def aguard_action(client: BylawClient, rule: EvidenceRule, tool_args: dict
             raise
         logger.warning("evidence: check-action failed (observe, continuing): %s", exc)
         return
-    _apply_action_result(client, session_id, customer_id, result)
+    _record_obligations(session_id, customer_id, result)
+    if result.is_allowed:
+        return
+    if client.config.evidence_mode != "enforce":
+        logger.info("evidence[observe]: would_%s %s — %s", result.decision, result.action_type, result.reason)
+        return
+    if result.decision == "review" and result.challenge is not None and _challenge_handler is not None:
+        resolution = _challenge_handler(result.challenge)
+        if inspect.isawaitable(resolution):
+            resolution = await resolution
+        final = await client.aresolve_challenge(_resolve_request(result.challenge, _coerce_resolution(resolution)))
+        _record_obligations(session_id, customer_id, final)
+        if final.is_allowed:
+            return
+        _block(final)
+    _block(result)
 
 
 async def aobserve_source(
