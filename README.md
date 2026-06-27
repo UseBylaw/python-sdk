@@ -45,7 +45,7 @@ Set environment variables (prefix: `BYLAW_`):
 | `BYLAW_VAULT_TIMEOUT` | `30.0` | Request timeout (seconds) |
 | `BYLAW_VERIFY_JWT` | `true` | Verify A-JWT signatures |
 | `BYLAW_JWT_ISSUER` | `alcv-vault` | Expected A-JWT issuer |
-| `BYLAW_JWT_AUDIENCE` | `bylaw-sdk` | Expected A-JWT audience |
+| `BYLAW_JWT_AUDIENCE` | `ledgix-sdk` | Expected A-JWT audience |
 | `BYLAW_AGENT_ID` | `default-agent` | Agent identifier |
 | `BYLAW_OTEL_ENABLED` | `true` | Emit OpenTelemetry span events and propagate trace context when an active span exists |
 

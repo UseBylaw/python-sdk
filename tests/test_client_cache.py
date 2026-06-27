@@ -25,7 +25,7 @@ def _make_jwt(private_key: Ed25519PrivateKey, request_id: str = "req-mint-001") 
     payload = {
         "sub": "clearance",
         "iss": "alcv-vault",
-        "aud": "bylaw-sdk",
+        "aud": "ledgix-sdk",
         "tool": "stripe_refund",
         "iat": datetime.now(timezone.utc),
         "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
