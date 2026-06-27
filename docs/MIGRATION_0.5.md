@@ -1,12 +1,12 @@
-# Migration Guide: 0.4.x → 0.5.0 (Ledgix → Bylaw)
+# Migration Guide: 0.4.x → 0.5.0 (Bylaw → Bylaw)
 
-Version 0.5.0 completes the Ledgix → Bylaw rebrand. This is a breaking release
+Version 0.5.0 completes the Bylaw → Bylaw rebrand. This is a breaking release
 for anyone still on the old package name or API symbols.
 
 ## Install
 
 ```bash
-pip uninstall ledgix-python  # if previously installed
+pip uninstall bylaw-python  # if previously installed
 pip install bylaw-python
 ```
 
@@ -14,7 +14,7 @@ pip install bylaw-python
 
 ```python
 # Before
-import ledgix_python as ledgix
+import bylaw_python as bylaw
 
 # After
 import bylaw_python as bylaw
@@ -24,39 +24,39 @@ import bylaw_python as bylaw
 
 | Before | After |
 |---|---|
-| `LedgixClient` | `BylawClient` |
-| `LedgixError` | `BylawError` |
-| `LedgixCallbackHandler` | `BylawCallbackHandler` |
-| `LedgixTool` | `BylawTool` |
-| `LedgixToolWrapper` | `BylawToolWrapper` |
-| `LedgixCrewAITool` | `BylawCrewAITool` |
+| `BylawClient` | `BylawClient` |
+| `BylawError` | `BylawError` |
+| `BylawCallbackHandler` | `BylawCallbackHandler` |
+| `BylawTool` | `BylawTool` |
+| `BylawToolWrapper` | `BylawToolWrapper` |
+| `BylawCrewAITool` | `BylawCrewAITool` |
 
 ## Environment variables
 
-All `LEDGIX_*` variables are now `BYLAW_*`:
+All `BYLAW_*` variables are now `BYLAW_*`:
 
 | Before | After |
 |---|---|
-| `LEDGIX_VAULT_URL` | `BYLAW_VAULT_URL` |
-| `LEDGIX_VAULT_API_KEY` | `BYLAW_VAULT_API_KEY` |
-| `LEDGIX_AGENT_ID` | `BYLAW_AGENT_ID` |
-| `LEDGIX_JWT_AUDIENCE` | `BYLAW_JWT_AUDIENCE` |
+| `BYLAW_VAULT_URL` | `BYLAW_VAULT_URL` |
+| `BYLAW_VAULT_API_KEY` | `BYLAW_VAULT_API_KEY` |
+| `BYLAW_AGENT_ID` | `BYLAW_AGENT_ID` |
+| `BYLAW_JWT_AUDIENCE` | `BYLAW_JWT_AUDIENCE` |
 
 ## Manifest files
 
 Rename your manifest file:
 
 ```bash
-mv ledgix.yaml bylaw.yaml   # or .yml / .json
+mv bylaw.yaml bylaw.yaml   # or .yml / .json
 ```
 
 ## CLI
 
 ```bash
 # Before
-ledgix init
-ledgix status
-ledgix teardown
+bylaw init
+bylaw status
+bylaw teardown
 
 # After
 bylaw init
@@ -70,9 +70,9 @@ Local dev scaffolding now writes `docker-compose.bylaw.yml` and `.env.bylaw`.
 
 These values remain the same until the Vault server-side rebrand ships:
 
-- JWT audience default: `ledgix-sdk`
-- Webhook signature header: `X-Ledgix-Signature`
-- Audit ledger hash domain: `ledgix.audit.event.v1` / `ledgix.audit.checkpoint.v1`
+- JWT audience default: `bylaw-sdk`
+- Webhook signature header: `X-Bylaw-Signature`
+- Audit ledger hash domain: `bylaw.audit.event.v1` / `bylaw.audit.checkpoint.v1`
 
 No action required unless you explicitly overrode these in your config.
 

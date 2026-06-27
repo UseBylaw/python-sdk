@@ -1,8 +1,8 @@
 # Evidence enforcement — Friedmann sample (Python)
 
-A minimal, end-to-end sample showing Ledgix evidence enforcement wired into an
-agent **purely through `ledgix.yaml`**. Five fake advisory tools become
-evidence-aware with no Ledgix-specific code inside them and **no manual fact-ID
+A minimal, end-to-end sample showing Bylaw evidence enforcement wired into an
+agent **purely through `bylaw.yaml`**. Five fake advisory tools become
+evidence-aware with no Bylaw-specific code inside them and **no manual fact-ID
 passing** — source tools auto-register evidence, and the protected action plus
 the customer-facing output are checked against that evidence before they run.
 
@@ -10,7 +10,7 @@ This is the GA "can a customer run it in under 30 minutes?" reference.
 
 ## What it demonstrates
 
-| Tool | Manifest `kind` | What Ledgix does |
+| Tool | Manifest `kind` | What Bylaw does |
 |---|---|---|
 | `get_customer_profile` | source / `profile` | registers `date_of_birth`, `risk_profile` |
 | `search_account_statement` | source / `uploaded_document` | registers `balance_now`, `balance_prev` |
@@ -28,7 +28,7 @@ flagged (observe) or blocked (enforce).
 
 ```bash
 # 1. Install the SDK. Published users:
-pip install ledgix-python          # imports as `ledgix_python`
+pip install bylaw-python          # imports as `bylaw_python`
 # In this repo, the local package imports as `bylaw_python` (the example uses it).
 pip install -e ../..
 
@@ -50,12 +50,12 @@ python run.py --enforce
 Observe → enforce is the whole adoption path: roll out in observe, watch the
 dashboard / replay to confirm no false positives, then flip to enforce.
 
-## The only configuration is `ledgix.yaml`
+## The only configuration is `bylaw.yaml`
 
-There is no Ledgix code in `tools.py`. `run.py` calls `configure()` +
-`auto_instrument(tools, manifest="ledgix.yaml")` once at startup; everything else
+There is no Bylaw code in `tools.py`. `run.py` calls `configure()` +
+`auto_instrument(tools, manifest="bylaw.yaml")` once at startup; everything else
 is the manifest. To enforce a new tool, add an `enforce` entry — no code change.
 
-> Published-package note: with `pip install ledgix-python` the import is
-> `import ledgix_python as ledgix`. This in-repo example imports the local
+> Published-package note: with `pip install bylaw-python` the import is
+> `import bylaw_python as bylaw`. This in-repo example imports the local
 > `bylaw_python` module; the API is identical.

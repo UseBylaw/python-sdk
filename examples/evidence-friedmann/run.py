@@ -3,7 +3,7 @@
     python run.py            # observe mode  — records would-decisions, never blocks
     python run.py --enforce  # enforce mode  — an ungrounded number is blocked
 
-Everything is configured by ledgix.yaml. The agent passes no fact IDs by hand:
+Everything is configured by bylaw.yaml. The agent passes no fact IDs by hand:
 source tools auto-register evidence, and the protected action + customer-facing
 output are checked against that evidence before they run.
 
@@ -18,8 +18,8 @@ import logging
 import os
 
 # In this repo the SDK module is `bylaw_python`; the published package
-# (`ledgix-python`) imports as `ledgix_python`. Either alias works the same.
-import bylaw_python as ledgix
+# (`bylaw-python`) imports as `bylaw_python`. Either alias works the same.
+import bylaw_python as bylaw
 
 import tools
 
@@ -45,20 +45,20 @@ def main() -> None:
     # Surface the SDK's observe-mode "would_*" lines.
     logging.basicConfig(level=logging.INFO, format="    [%(name)s] %(message)s")
 
-    ledgix.configure(
+    bylaw.configure(
         vault_url=os.environ.get("BYLAW_VAULT_URL", "http://localhost:8000"),
         vault_api_key=os.environ.get("BYLAW_VAULT_API_KEY", ""),
         agent_id="friedmann-advisor",
         evidence_mode=mode,          # gates the protected action
         evidence_output_mode=mode,   # gates the customer-facing output
     )
-    wrapped = ledgix.auto_instrument(tools, manifest="ledgix.yaml")
-    banner(f"Ledgix evidence enforcement — {mode.upper()} mode")
-    print("  Instrumented tools (via ledgix.yaml, zero manual fact-IDs):")
+    wrapped = bylaw.auto_instrument(tools, manifest="bylaw.yaml")
+    banner(f"Bylaw evidence enforcement — {mode.upper()} mode")
+    print("  Instrumented tools (via bylaw.yaml, zero manual fact-IDs):")
     for name in wrapped:
         print(f"    - {name}")
 
-    with ledgix.evidence_session(session_id=SESSION, customer_id=CUSTOMER):
+    with bylaw.evidence_session(session_id=SESSION, customer_id=CUSTOMER):
         banner("1. Source tools auto-register evidence")
         prof = tools.get_customer_profile(CUSTOMER)
         print(f"  profile: {prof['name']} (dob {prof['date_of_birth']}, {prof['risk_profile']})")
@@ -75,7 +75,7 @@ def main() -> None:
         try:
             tools.send_advisor_response(CUSTOMER, GROUNDED)
             print("  sent ✓  (12% recomputes from balance_now/balance_prev)")
-        except ledgix.EvidenceBlockedError as exc:
+        except bylaw.EvidenceBlockedError as exc:
             print(f"  BLOCKED: {exc}")
 
         banner("3b. Customer-facing output — a FABRICATED number ($52,000)")
@@ -85,7 +85,7 @@ def main() -> None:
                 print("  sent ✓  (unexpected — should have been blocked)")
             else:
                 print("  sent ✓  (observe: recorded would_deny above, not blocked)")
-        except ledgix.EvidenceBlockedError as exc:
+        except bylaw.EvidenceBlockedError as exc:
             print(f"  BLOCKED ✗  {exc}")
 
     banner("Done")

@@ -7,33 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.0]
 
-### Breaking changes — Ledgix → Bylaw rebrand
+### Breaking changes — Bylaw → Bylaw rebrand
 
-The SDK has been rebranded from Ledgix to Bylaw. See
+The SDK has been rebranded from Bylaw to Bylaw. See
 [`docs/MIGRATION_0.5.md`](docs/MIGRATION_0.5.md) for the full migration guide.
 
 #### Package & CLI
-- PyPI package: `bylaw-python` (replaces `ledgix-python`)
-- CLI command: `bylaw` (replaces `ledgix`)
-- Import path: `bylaw_python` (replaces `ledgix_python`)
+- PyPI package: `bylaw-python` (replaces `bylaw-python`)
+- CLI command: `bylaw` (replaces `bylaw`)
+- Import path: `bylaw_python` (replaces `bylaw_python`)
 
 #### Renamed public API
-- `LedgixClient` → `BylawClient`
-- `LedgixError` → `BylawError`
-- `LedgixCallbackHandler` → `BylawCallbackHandler`
-- `LedgixTool` → `BylawTool` (LangChain adapter)
-- `LedgixToolWrapper` → `BylawToolWrapper` (LlamaIndex adapter)
-- `LedgixCrewAITool` → `BylawCrewAITool`
+- `BylawClient` → `BylawClient`
+- `BylawError` → `BylawError`
+- `BylawCallbackHandler` → `BylawCallbackHandler`
+- `BylawTool` → `BylawTool` (LangChain adapter)
+- `BylawToolWrapper` → `BylawToolWrapper` (LlamaIndex adapter)
+- `BylawCrewAITool` → `BylawCrewAITool`
 
 #### Configuration
-- Environment variable prefix: `BYLAW_` (replaces `LEDGIX_`)
-- Manifest filenames: `bylaw.yaml` / `bylaw.yml` / `bylaw.json` (replaces `ledgix.*`)
-- Dev compose file: `docker-compose.bylaw.yml` (replaces `docker-compose.ledgix.yml`)
+- Environment variable prefix: `BYLAW_` (replaces `BYLAW_`)
+- Manifest filenames: `bylaw.yaml` / `bylaw.yml` / `bylaw.json` (replaces `bylaw.*`)
+- Dev compose file: `docker-compose.bylaw.yml` (replaces `docker-compose.bylaw.yml`)
 
 #### Unchanged (Vault wire protocol)
-- JWT audience default remains `ledgix-sdk` until the Vault server rebrand ships
-- Audit ledger hash prefixes (`ledgix.audit.*`) unchanged for merkle compatibility
-- Webhook header `X-Ledgix-Signature` unchanged until Vault emits the new header
+- JWT audience default remains `bylaw-sdk` until the Vault server rebrand ships
+- Audit ledger hash prefixes (`bylaw.audit.*`) unchanged for merkle compatibility
+- Webhook header `X-Bylaw-Signature` unchanged until Vault emits the new header
 
 ## [0.4.0]
 

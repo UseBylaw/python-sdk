@@ -23,11 +23,16 @@ def make_jwks(private_key: Ed25519PrivateKey, kid: str) -> dict:
     return {"keys": [jwk]}
 
 
-def make_token(private_key: Ed25519PrivateKey, kid: str, jti: str | None = None) -> str:
+def make_token(
+    private_key: Ed25519PrivateKey,
+    kid: str,
+    jti: str | None = None,
+    audience: str = "bylaw-sdk",
+) -> str:
     payload = {
         "sub": "clearance",
         "iss": "alcv-vault",
-        "aud": "ledgix-sdk",
+        "aud": audience,
         "tool": "stripe_refund",
         "iat": datetime.now(timezone.utc),
         "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
@@ -43,7 +48,7 @@ def config() -> VaultConfig:
         vault_api_key="key",
         verify_jwt=True,
         jwt_issuer="alcv-vault",
-        jwt_audience="ledgix-sdk",
+        jwt_audience="bylaw-sdk",
         max_retries=0,
         jwks_ttl_seconds=300,
     )
@@ -60,6 +65,26 @@ def test_verify_token_with_kid_matching(config: VaultConfig) -> None:
         client = BylawClient(config=config)
         decoded = client.verify_token(token)
         assert decoded["sub"] == "clearance"
+
+
+def test_default_audience_matches_current_vault() -> None:
+    """Default verification accepts Vault A-JWTs until the server audience rebrands."""
+    key = Ed25519PrivateKey.generate()
+    jwks = make_jwks(key, "k1")
+    token = make_token(key, "k1", audience="bylaw-sdk")
+    config = VaultConfig(
+        vault_url="https://vault.test",
+        vault_api_key="key",
+        verify_jwt=True,
+        jwt_issuer="alcv-vault",
+        max_retries=0,
+    )
+
+    with respx.mock(base_url="https://vault.test") as mock:
+        mock.get("/.well-known/jwks.json").mock(return_value=Response(200, json=jwks))
+        client = BylawClient(config=config)
+        decoded = client.verify_token(token)
+        assert decoded["aud"] == "bylaw-sdk"
 
 
 def test_verify_refetches_jwks_on_kid_miss(config: VaultConfig) -> None:

@@ -1,6 +1,6 @@
-# ledgix.yaml — the ONLY configuration for this sample.
+# bylaw.yaml — the ONLY configuration for this sample.
 #
-# Five fake advisory tools are wired into Ledgix evidence enforcement purely by
+# Five fake advisory tools are wired into Bylaw evidence enforcement purely by
 # this manifest. The agent never passes a fact ID by hand: source tools auto-
 # register evidence, the session store keeps the IDs, and the protected action +
 # customer-facing output are checked against that evidence before they run.

@@ -36,7 +36,7 @@ class VaultConfig(BaseSettings):
     jwt_issuer: str = "alcv-vault"
     """Expected issuer for Vault A-JWTs."""
 
-    jwt_audience: str = "ledgix-sdk"
+    jwt_audience: str = "bylaw-sdk"
     """Expected audience for Vault A-JWTs."""
 
     agent_id: str = "default-agent"

@@ -1,6 +1,6 @@
 # Bylaw ALCV — Python SDK
 
-[![PyPI](https://img.shields.io/badge/pypi-v0.6.2-blue)](https://pypi.org/project/bylaw-python/)
+[![PyPI](https://img.shields.io/badge/pypi-v0.6.3-blue)](https://pypi.org/project/bylaw-python/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -45,7 +45,7 @@ Set environment variables (prefix: `BYLAW_`):
 | `BYLAW_VAULT_TIMEOUT` | `30.0` | Request timeout (seconds) |
 | `BYLAW_VERIFY_JWT` | `true` | Verify A-JWT signatures |
 | `BYLAW_JWT_ISSUER` | `alcv-vault` | Expected A-JWT issuer |
-| `BYLAW_JWT_AUDIENCE` | `ledgix-sdk` | Expected A-JWT audience |
+| `BYLAW_JWT_AUDIENCE` | `bylaw-sdk` | Expected A-JWT audience |
 | `BYLAW_AGENT_ID` | `default-agent` | Agent identifier |
 | `BYLAW_OTEL_ENABLED` | `true` | Emit OpenTelemetry span events and propagate trace context when an active span exists |
 
@@ -70,8 +70,8 @@ The SDK records clearance outcomes as span events on the active span and sends `
 
 Events:
 
-- `ledgix.clearance.pending_review`
-- `ledgix.clearance.decision`
+- `bylaw.clearance.pending_review`
+- `bylaw.clearance.decision`
 
 Event attributes include request ID, decision/status fields, policy version/hash, confidence buckets, tool name, agent/session IDs, manual review flag, and latency. The SDK also injects W3C trace propagation headers into Vault HTTP calls when OpenTelemetry propagation is available.
 
