@@ -82,6 +82,7 @@ from .models import (
     RegisteredFact,
     _MISSING,
 )
+from .otel import current_otel_metadata, inject_otel_headers, record_clearance_event
 
 
 class BylawClient:
@@ -135,6 +136,12 @@ class BylawClient:
         if self.config.vault_api_key:
             headers["X-Vault-API-Key"] = self.config.vault_api_key
         return headers
+
+    def _request_headers(self, extra: dict[str, str] | None = None) -> dict[str, str]:
+        headers = self._headers()
+        if extra:
+            headers.update(extra)
+        return inject_otel_headers(headers, self.config.otel_enabled)
 
     def _get_sync_client(self) -> httpx.Client:
         if self._sync_client is None or self._sync_client.is_closed:
@@ -279,6 +286,16 @@ class BylawClient:
             if request.destination_account_ref is None and "destination_account_ref" in inferred:
                 updates["destination_account_ref"] = inferred["destination_account_ref"]
         return request.model_copy(update=updates) if updates else request
+
+    def _enrich_request_with_telemetry(self, request: ClearanceRequest) -> ClearanceRequest:
+        otel = current_otel_metadata(self.config.otel_enabled)
+        if not otel:
+            return request
+        context = dict(request.context or {})
+        telemetry = dict(context.get("telemetry") or {})
+        telemetry["otel"] = otel
+        context["telemetry"] = telemetry
+        return request.model_copy(update={"context": context})
 
     def create_delegated_client(self, parent_jti: str) -> "BylawClient":
         """Return a new client that auto-injects *parent_jti* on every clearance request.
@@ -453,15 +470,17 @@ class BylawClient:
             VaultConnectionError: If the Vault is unreachable.
         """
         request = self._enrich_request(request)
+        request = self._enrich_request_with_telemetry(request)
         cache_key = self._build_cache_key(request)
         envelope = self._cache_get(cache_key)
         if envelope is not None:
             clearance = self._mint_token(request, envelope)
+            record_clearance_event(self.config.otel_enabled, "ledgix.clearance.decision", request, clearance)
             if self.config.verify_jwt and clearance.token:
                 self.verify_token(clearance.token)
             return clearance
 
-        idem_headers = {"Idempotency-Key": str(uuid.uuid4())}
+        idem_headers = self._request_headers({"Idempotency-Key": str(uuid.uuid4())})
         try:
             response = self._sync_retry(
                 lambda: self._get_sync_client().post(
@@ -477,11 +496,14 @@ class BylawClient:
             ) from exc
 
         clearance = ClearanceResponse.model_validate(response.json())
+        if clearance.status in {"pending_review", "pendingReview", "processing"}:
+            record_clearance_event(self.config.otel_enabled, "ledgix.clearance.pending_review", request, clearance)
         result = self._resolve_pending_clearance(clearance)
         if isinstance(result, PendingApproval):
             raise ReviewPendingError(result)
         clearance = result
 
+        record_clearance_event(self.config.otel_enabled, "ledgix.clearance.decision", request, clearance)
         if not clearance.is_approved:
             raise ClearanceDeniedError(
                 reason=clearance.reason,
@@ -512,15 +534,17 @@ class BylawClient:
             VaultConnectionError: If the Vault is unreachable.
         """
         request = self._enrich_request(request)
+        request = self._enrich_request_with_telemetry(request)
         cache_key = self._build_cache_key(request)
         envelope = self._cache_get(cache_key)
         if envelope is not None:
             clearance = await self._amint_token(request, envelope)
+            record_clearance_event(self.config.otel_enabled, "ledgix.clearance.decision", request, clearance)
             if self.config.verify_jwt and clearance.token:
                 await self.averify_token(clearance.token)
             return clearance
 
-        idem_headers = {"Idempotency-Key": str(uuid.uuid4())}
+        idem_headers = self._request_headers({"Idempotency-Key": str(uuid.uuid4())})
         try:
             response = await self._async_retry(
                 lambda: self._get_async_client().post(
@@ -536,11 +560,14 @@ class BylawClient:
             ) from exc
 
         clearance = ClearanceResponse.model_validate(response.json())
+        if clearance.status in {"pending_review", "pendingReview", "processing"}:
+            record_clearance_event(self.config.otel_enabled, "ledgix.clearance.pending_review", request, clearance)
         result = await self._aresolve_pending_clearance(clearance)
         if isinstance(result, PendingApproval):
             raise ReviewPendingError(result)
         clearance = result
 
+        record_clearance_event(self.config.otel_enabled, "ledgix.clearance.decision", request, clearance)
         if not clearance.is_approved:
             raise ClearanceDeniedError(
                 reason=clearance.reason,

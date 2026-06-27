@@ -10,6 +10,8 @@ Agent-agnostic compliance shim for SOX 404 policy enforcement. Intercepts AI age
 
 ```bash
 pip install bylaw-python
+# Optional OpenTelemetry correlation:
+pip install "bylaw-python[otel]"
 ```
 
 ```python
@@ -45,6 +47,7 @@ Set environment variables (prefix: `BYLAW_`):
 | `BYLAW_JWT_ISSUER` | `alcv-vault` | Expected A-JWT issuer |
 | `BYLAW_JWT_AUDIENCE` | `ledgix-sdk` | Expected A-JWT audience |
 | `BYLAW_AGENT_ID` | `default-agent` | Agent identifier |
+| `BYLAW_OTEL_ENABLED` | `true` | Emit OpenTelemetry span events and propagate trace context when an active span exists |
 
 Or pass a `VaultConfig` directly:
 
@@ -54,6 +57,25 @@ from bylaw_python import BylawClient, VaultConfig
 config = VaultConfig(vault_url="https://vault.mycompany.com", vault_api_key="sk-...")
 client = BylawClient(config=config)
 ```
+
+## OpenTelemetry correlation
+
+If your app already has OpenTelemetry configured, install the optional extra and leave `otel_enabled` on:
+
+```bash
+pip install "bylaw-python[otel]"
+```
+
+The SDK records clearance outcomes as span events on the active span and sends `context.telemetry.otel` to Vault so ledger entries can be correlated back to your trace by `trace_id`, `span_id`, and `request_id`.
+
+Events:
+
+- `ledgix.clearance.pending_review`
+- `ledgix.clearance.decision`
+
+Event attributes include request ID, decision/status fields, policy version/hash, confidence buckets, tool name, agent/session IDs, manual review flag, and latency. The SDK also injects W3C trace propagation headers into Vault HTTP calls when OpenTelemetry propagation is available.
+
+Telemetry is best-effort: if OpenTelemetry is not installed, disabled, or no span is active, clearance behavior is unchanged. The SDK does not include raw tool args, prompt text, model output, or policy reasoning in OTel attributes.
 
 ## Manifest-driven auto-instrumentation
 

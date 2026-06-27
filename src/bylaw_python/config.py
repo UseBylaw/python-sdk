@@ -119,6 +119,11 @@ class VaultConfig(BaseSettings):
     Redis/Postgres backends are a later add for multi-worker / hosted runs.
     Env: ``BYLAW_EVIDENCE_SESSION_BACKEND``."""
 
+    otel_enabled: bool = True
+    """Emit OpenTelemetry span events and propagate trace context when available.
+    If ``opentelemetry-api`` is not installed or no span is active, this is a
+    no-op. Env: ``BYLAW_OTEL_ENABLED``."""
+
     @field_validator("evidence_mode")
     @classmethod
     def _validate_evidence_mode(cls, value: str) -> str:
