@@ -8,7 +8,7 @@ acceptance criteria. Exits non-zero on the first failure.
     python validate_pilot.py
 
 Criteria checked:
-  1. Configured via ledgix.yaml only — no manual fact-ID passing.
+  1. Configured via bylaw.yaml only — no manual fact-ID passing.
   2. A protected recommendation requires evidence (it runs once facts exist).
   3. An unsupported financial number is blocked in enforce mode.
   4. A grounded financial number is allowed (recomputed from evidence).
@@ -19,7 +19,7 @@ from __future__ import annotations
 import os
 import sys
 
-import bylaw_python as ledgix
+import bylaw_python as bylaw
 from bylaw_python import BylawClient, VaultConfig
 
 import tools
@@ -47,36 +47,36 @@ def main() -> int:
         evidence_mode="enforce",
         evidence_output_mode="enforce",
     )
-    client: BylawClient = ledgix.configure(cfg)
-    wrapped = ledgix.auto_instrument(tools, manifest="ledgix.yaml")
+    client: BylawClient = bylaw.configure(cfg)
+    wrapped = bylaw.auto_instrument(tools, manifest="bylaw.yaml")
     decision_receipts: list[tuple[str, str]] = []
     original_check_action = client.check_action
     original_check_output = client.check_output
 
     def record_decision(
-        kind: str, result: ledgix.CheckActionResult
-    ) -> ledgix.CheckActionResult:
+        kind: str, result: bylaw.CheckActionResult
+    ) -> bylaw.CheckActionResult:
         decision_receipts.append((kind, result.receipt_id))
         return result
 
     def recording_check_action(
-        request: ledgix.CheckActionRequest,
-    ) -> ledgix.CheckActionResult:
+        request: bylaw.CheckActionRequest,
+    ) -> bylaw.CheckActionResult:
         return record_decision("check-action", original_check_action(request))
 
     def recording_check_output(
-        request: ledgix.CheckOutputRequest,
-    ) -> ledgix.CheckActionResult:
+        request: bylaw.CheckOutputRequest,
+    ) -> bylaw.CheckActionResult:
         return record_decision("check-output", original_check_output(request))
 
     client.check_action = recording_check_action  # type: ignore[method-assign]
     client.check_output = recording_check_output  # type: ignore[method-assign]
 
-    print("Ledgix pilot validation — Friedmann sample\n")
-    check("1. Configured via ledgix.yaml only (5 tools, zero manual fact-IDs)",
+    print("Bylaw pilot validation — Friedmann sample\n")
+    check("1. Configured via bylaw.yaml only (5 tools, zero manual fact-IDs)",
           len(wrapped) == 5, f"{len(wrapped)} tools wrapped")
 
-    with ledgix.evidence_session(session_id=SESSION, customer_id=CUSTOMER):
+    with bylaw.evidence_session(session_id=SESSION, customer_id=CUSTOMER):
         # Register evidence purely by calling the instrumented source tools.
         tools.get_customer_profile(CUSTOMER)
         tools.search_account_statement(CUSTOMER)
@@ -86,7 +86,7 @@ def main() -> int:
         rec_ok = True
         try:
             tools.generate_recommendation(CUSTOMER)
-        except ledgix.EvidenceBlockedError as exc:
+        except bylaw.EvidenceBlockedError as exc:
             rec_ok = False
             detail = str(exc)
         else:
@@ -97,7 +97,7 @@ def main() -> int:
         blocked = False
         try:
             tools.send_advisor_response(CUSTOMER, FABRICATED)
-        except ledgix.EvidenceBlockedError:
+        except bylaw.EvidenceBlockedError:
             blocked = True
         check("3. Unsupported $52,000 is blocked", blocked)
 
@@ -105,7 +105,7 @@ def main() -> int:
         grounded_ok = True
         try:
             tools.send_advisor_response(CUSTOMER, GROUNDED)
-        except ledgix.EvidenceBlockedError as exc:
+        except bylaw.EvidenceBlockedError as exc:
             grounded_ok = False
         check("4. Grounded 12% is allowed (recomputed from balances)", grounded_ok)
 

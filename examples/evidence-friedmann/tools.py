@@ -1,8 +1,8 @@
-"""Fake advisory tools for the Ledgix evidence-enforcement sample.
+"""Fake advisory tools for the Bylaw evidence-enforcement sample.
 
 These are deliberately plain functions returning canned data — the point of the
-sample is that they become evidence-aware purely through ``ledgix.yaml`` +
-``auto_instrument``, with no Ledgix-specific code in the tools themselves.
+sample is that they become evidence-aware purely through ``bylaw.yaml`` +
+``auto_instrument``, with no Bylaw-specific code in the tools themselves.
 
 The scenario is "Friedmann", a conservative retirement client.
 """

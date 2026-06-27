@@ -475,7 +475,7 @@ class BylawClient:
         envelope = self._cache_get(cache_key)
         if envelope is not None:
             clearance = self._mint_token(request, envelope)
-            record_clearance_event(self.config.otel_enabled, "ledgix.clearance.decision", request, clearance)
+            record_clearance_event(self.config.otel_enabled, "bylaw.clearance.decision", request, clearance)
             if self.config.verify_jwt and clearance.token:
                 self.verify_token(clearance.token)
             return clearance
@@ -497,13 +497,13 @@ class BylawClient:
 
         clearance = ClearanceResponse.model_validate(response.json())
         if clearance.status in {"pending_review", "pendingReview", "processing"}:
-            record_clearance_event(self.config.otel_enabled, "ledgix.clearance.pending_review", request, clearance)
+            record_clearance_event(self.config.otel_enabled, "bylaw.clearance.pending_review", request, clearance)
         result = self._resolve_pending_clearance(clearance)
         if isinstance(result, PendingApproval):
             raise ReviewPendingError(result)
         clearance = result
 
-        record_clearance_event(self.config.otel_enabled, "ledgix.clearance.decision", request, clearance)
+        record_clearance_event(self.config.otel_enabled, "bylaw.clearance.decision", request, clearance)
         if not clearance.is_approved:
             raise ClearanceDeniedError(
                 reason=clearance.reason,
@@ -539,7 +539,7 @@ class BylawClient:
         envelope = self._cache_get(cache_key)
         if envelope is not None:
             clearance = await self._amint_token(request, envelope)
-            record_clearance_event(self.config.otel_enabled, "ledgix.clearance.decision", request, clearance)
+            record_clearance_event(self.config.otel_enabled, "bylaw.clearance.decision", request, clearance)
             if self.config.verify_jwt and clearance.token:
                 await self.averify_token(clearance.token)
             return clearance
@@ -561,13 +561,13 @@ class BylawClient:
 
         clearance = ClearanceResponse.model_validate(response.json())
         if clearance.status in {"pending_review", "pendingReview", "processing"}:
-            record_clearance_event(self.config.otel_enabled, "ledgix.clearance.pending_review", request, clearance)
+            record_clearance_event(self.config.otel_enabled, "bylaw.clearance.pending_review", request, clearance)
         result = await self._aresolve_pending_clearance(clearance)
         if isinstance(result, PendingApproval):
             raise ReviewPendingError(result)
         clearance = result
 
-        record_clearance_event(self.config.otel_enabled, "ledgix.clearance.decision", request, clearance)
+        record_clearance_event(self.config.otel_enabled, "bylaw.clearance.decision", request, clearance)
         if not clearance.is_approved:
             raise ClearanceDeniedError(
                 reason=clearance.reason,
@@ -1625,10 +1625,10 @@ class BylawClient:
         )
 
     def _hash_event_payload(self, payload: bytes) -> str:
-        return hashlib.sha256(b"ledgix.audit.event.v1\x00" + payload).hexdigest()
+        return hashlib.sha256(b"bylaw.audit.event.v1\x00" + payload).hexdigest()
 
     def _hash_checkpoint_payload(self, payload: bytes) -> str:
-        return hashlib.sha256(b"ledgix.audit.checkpoint.v1\x00" + payload).hexdigest()
+        return hashlib.sha256(b"bylaw.audit.checkpoint.v1\x00" + payload).hexdigest()
 
     def _hash_leaf(self, event_hash: str) -> str:
         return hashlib.sha256(b"\x00" + bytes.fromhex(event_hash)).hexdigest()

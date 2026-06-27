@@ -190,10 +190,10 @@ class TestRequestClearance:
             "trace_flags": 1,
             "trace_state": "vendor=value",
         }
-        assert span.events[0][0] == "ledgix.clearance.decision"
-        assert span.events[0][1]["ledgix.request_id"] == "req-001"
-        assert span.events[0][1]["ledgix.decision_status"] == "approved"
-        assert span.events[0][1]["ledgix.latency_ms"] == 12
+        assert span.events[0][0] == "bylaw.clearance.decision"
+        assert span.events[0][1]["bylaw.request_id"] == "req-001"
+        assert span.events[0][1]["bylaw.decision_status"] == "approved"
+        assert span.events[0][1]["bylaw.latency_ms"] == 12
 
     @respx.mock
     def test_otel_absent_is_noop(self, client: BylawClient, approved_response: dict):
@@ -220,9 +220,9 @@ class TestRequestClearance:
         with pytest.raises(ClearanceDeniedError):
             client.request_clearance(ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 5000}))
 
-        assert span.events[0][0] == "ledgix.clearance.decision"
-        assert span.events[0][1]["ledgix.decision_status"] == "denied"
-        assert span.events[0][1]["ledgix.reason_code"] == "spend_cap_exceeded"
+        assert span.events[0][0] == "bylaw.clearance.decision"
+        assert span.events[0][1]["bylaw.decision_status"] == "denied"
+        assert span.events[0][1]["bylaw.reason_code"] == "spend_cap_exceeded"
 
     @respx.mock
     def test_otel_pending_review_event_before_detach_error(self, vault_config: VaultConfig):
@@ -248,9 +248,9 @@ class TestRequestClearance:
         with pytest.raises(ReviewPendingError):
             client.request_clearance(ClearanceRequest(tool_name="wire_transfer", tool_args={"amount": 5000}))
 
-        assert span.events[0][0] == "ledgix.clearance.pending_review"
-        assert span.events[0][1]["ledgix.request_id"] == "req-review-001"
-        assert span.events[0][1]["ledgix.requires_manual_review"] is True
+        assert span.events[0][0] == "bylaw.clearance.pending_review"
+        assert span.events[0][1]["bylaw.request_id"] == "req-review-001"
+        assert span.events[0][1]["bylaw.requires_manual_review"] is True
 
     @respx.mock
     def test_processing_polls_until_approved(self, client: BylawClient, approved_response: dict):
@@ -324,8 +324,8 @@ class TestAsyncRequestClearance:
         body = json.loads(sent.content)
         assert body["context"]["telemetry"]["otel"]["trace_id"] == "0af7651916cd43dd8448eb211c80319c"
         assert body["context"]["telemetry"]["otel"]["span_id"] == "b7ad6b7169203331"
-        assert span.events[0][0] == "ledgix.clearance.decision"
-        assert span.events[0][1]["ledgix.request_id"] == "req-001"
+        assert span.events[0][0] == "bylaw.clearance.decision"
+        assert span.events[0][1]["bylaw.request_id"] == "req-001"
         assert result.is_approved is True
 
     @respx.mock
@@ -566,7 +566,7 @@ class TestLedgerProofVerification:
                 "tool_name": entry["tool_name"],
             }
         )
-        return cls._sha256_hex(b"ledgix.audit.event.v1\x00", payload)
+        return cls._sha256_hex(b"bylaw.audit.event.v1\x00", payload)
 
     @classmethod
     def _hash_leaf(cls, event_hash: str) -> str:
@@ -605,7 +605,7 @@ class TestLedgerProofVerification:
 
     @classmethod
     def _hash_checkpoint_payload(cls, payload: bytes) -> str:
-        return cls._sha256_hex(b"ledgix.audit.checkpoint.v1\x00", payload)
+        return cls._sha256_hex(b"bylaw.audit.checkpoint.v1\x00", payload)
 
     @respx.mock
     def test_fetch_ledger_and_manifests(self, client: BylawClient):
