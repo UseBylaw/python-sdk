@@ -16,10 +16,51 @@ from bylaw_python import BylawClient, VaultConfig
 from bylaw_python.exceptions import (
     ClearanceDeniedError,
     PolicyRegistrationError,
+    ReviewPendingError,
     TokenVerificationError,
     VaultConnectionError,
 )
 from bylaw_python.models import ClearanceRequest, PolicyRegistration
+from bylaw_python.otel import _set_otel_api_for_tests
+
+
+class _FakeSpanContext:
+    trace_id = int("0af7651916cd43dd8448eb211c80319c", 16)
+    span_id = int("b7ad6b7169203331", 16)
+    trace_flags = 1
+    trace_state = "vendor=value"
+    is_valid = True
+
+
+class _FakeSpan:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, dict]] = []
+
+    def get_span_context(self) -> _FakeSpanContext:
+        return _FakeSpanContext()
+
+    def add_event(self, name: str, attrs: dict) -> None:
+        self.events.append((name, attrs))
+
+
+class _FakeTrace:
+    def __init__(self, span: _FakeSpan) -> None:
+        self.span = span
+
+    def get_current_span(self) -> _FakeSpan:
+        return self.span
+
+
+class _FakePropagate:
+    def inject(self, carrier: dict[str, str]) -> None:
+        carrier["traceparent"] = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+
+
+@pytest.fixture(autouse=True)
+def _reset_otel_test_api():
+    _set_otel_api_for_tests(None)
+    yield
+    _set_otel_api_for_tests()
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -113,6 +154,105 @@ class TestRequestClearance:
         assert body["agent_id"] == "my-agent"
 
     @respx.mock
+    def test_otel_active_span_adds_context_headers_and_decision_event(self, client: BylawClient, approved_response: dict):
+        span = _FakeSpan()
+        _set_otel_api_for_tests((_FakeTrace(span), _FakePropagate()))
+        approved_response.update(
+            {
+                "reason_code": "ok",
+                "policy_version_id": "pv-1",
+                "policy_content_hash": "sha256:abc",
+                "confidence_bucket": "extra_high",
+                "minimum_confidence_bucket": "medium",
+                "latency_ms": 12,
+            }
+        )
+        route = respx.post("https://vault.test/request-clearance").mock(
+            return_value=Response(200, json=approved_response)
+        )
+
+        client.request_clearance(
+            ClearanceRequest(
+                tool_name="stripe_refund",
+                tool_args={"amount": 99},
+                agent_id="my-agent",
+                session_id="sess-123",
+                context={"policy_id": "refunds"},
+            )
+        )
+
+        sent = route.calls[0].request
+        assert sent.headers["traceparent"] == "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+        body = json.loads(sent.content)
+        assert body["context"]["telemetry"]["otel"] == {
+            "trace_id": "0af7651916cd43dd8448eb211c80319c",
+            "span_id": "b7ad6b7169203331",
+            "trace_flags": 1,
+            "trace_state": "vendor=value",
+        }
+        assert span.events[0][0] == "ledgix.clearance.decision"
+        assert span.events[0][1]["ledgix.request_id"] == "req-001"
+        assert span.events[0][1]["ledgix.decision_status"] == "approved"
+        assert span.events[0][1]["ledgix.latency_ms"] == 12
+
+    @respx.mock
+    def test_otel_absent_is_noop(self, client: BylawClient, approved_response: dict):
+        _set_otel_api_for_tests(None)
+        route = respx.post("https://vault.test/request-clearance").mock(
+            return_value=Response(200, json=approved_response)
+        )
+
+        result = client.request_clearance(ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45}))
+
+        body = json.loads(route.calls[0].request.content)
+        assert "telemetry" not in body.get("context", {})
+        assert result.is_approved is True
+
+    @respx.mock
+    def test_otel_denial_event_before_error(self, client: BylawClient, denied_response: dict):
+        span = _FakeSpan()
+        _set_otel_api_for_tests((_FakeTrace(span), _FakePropagate()))
+        denied_response["reason_code"] = "spend_cap_exceeded"
+        respx.post("https://vault.test/request-clearance").mock(
+            return_value=Response(200, json=denied_response)
+        )
+
+        with pytest.raises(ClearanceDeniedError):
+            client.request_clearance(ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 5000}))
+
+        assert span.events[0][0] == "ledgix.clearance.decision"
+        assert span.events[0][1]["ledgix.decision_status"] == "denied"
+        assert span.events[0][1]["ledgix.reason_code"] == "spend_cap_exceeded"
+
+    @respx.mock
+    def test_otel_pending_review_event_before_detach_error(self, vault_config: VaultConfig):
+        span = _FakeSpan()
+        _set_otel_api_for_tests((_FakeTrace(span), _FakePropagate()))
+        client = BylawClient(vault_config.model_copy(update={"review_mode": "detach"}))
+        respx.post("https://vault.test/request-clearance").mock(
+            return_value=Response(
+                200,
+                json={
+                    "status": "pending_review",
+                    "decision_status": "approved_pending_review",
+                    "requires_manual_review": True,
+                    "token": None,
+                    "reason": "Needs review",
+                    "request_id": "req-review-001",
+                    "confidence_bucket": "low",
+                    "minimum_confidence_bucket": "medium",
+                },
+            )
+        )
+
+        with pytest.raises(ReviewPendingError):
+            client.request_clearance(ClearanceRequest(tool_name="wire_transfer", tool_args={"amount": 5000}))
+
+        assert span.events[0][0] == "ledgix.clearance.pending_review"
+        assert span.events[0][1]["ledgix.request_id"] == "req-review-001"
+        assert span.events[0][1]["ledgix.requires_manual_review"] is True
+
+    @respx.mock
     def test_processing_polls_until_approved(self, client: BylawClient, approved_response: dict):
         processing_response = {
             "status": "processing",
@@ -157,6 +297,36 @@ class TestAsyncRequestClearance:
 
         assert result.is_approved is True
         assert result.token is not None
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_otel_active_span_adds_context_headers_and_decision_event_async(
+        self, client: BylawClient, approved_response: dict
+    ):
+        span = _FakeSpan()
+        _set_otel_api_for_tests((_FakeTrace(span), _FakePropagate()))
+        route = respx.post("https://vault.test/request-clearance").mock(
+            return_value=Response(200, json=approved_response)
+        )
+
+        result = await client.arequest_clearance(
+            ClearanceRequest(
+                tool_name="stripe_refund",
+                tool_args={"amount": 99},
+                agent_id="my-agent",
+                session_id="sess-123",
+                context={"policy_id": "refunds"},
+            )
+        )
+
+        sent = route.calls[0].request
+        assert sent.headers["traceparent"] == "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+        body = json.loads(sent.content)
+        assert body["context"]["telemetry"]["otel"]["trace_id"] == "0af7651916cd43dd8448eb211c80319c"
+        assert body["context"]["telemetry"]["otel"]["span_id"] == "b7ad6b7169203331"
+        assert span.events[0][0] == "ledgix.clearance.decision"
+        assert span.events[0][1]["ledgix.request_id"] == "req-001"
+        assert result.is_approved is True
 
     @respx.mock
     @pytest.mark.asyncio

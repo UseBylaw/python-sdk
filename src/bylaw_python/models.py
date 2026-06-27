@@ -112,6 +112,7 @@ class ClearanceResponse(BaseModel):
         default=None,
         description="Machine-readable denial code, e.g. 'spend_cap_exceeded'",
     )
+    latency_ms: float | None = Field(default=None, description="Judge-reported total latency in milliseconds, when available")
 
     @property
     def is_approved(self) -> bool:
