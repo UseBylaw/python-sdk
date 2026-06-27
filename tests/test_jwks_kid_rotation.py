@@ -71,7 +71,7 @@ def test_default_audience_matches_current_vault() -> None:
     """Default verification accepts Vault A-JWTs until the server audience rebrands."""
     key = Ed25519PrivateKey.generate()
     jwks = make_jwks(key, "k1")
-    token = make_token(key, "k1", audience="ledgix-sdk")
+    token = make_token(key, "k1", audience="bylaw-sdk")
     config = VaultConfig(
         vault_url="https://vault.test",
         vault_api_key="key",
@@ -84,7 +84,7 @@ def test_default_audience_matches_current_vault() -> None:
         mock.get("/.well-known/jwks.json").mock(return_value=Response(200, json=jwks))
         client = BylawClient(config=config)
         decoded = client.verify_token(token)
-        assert decoded["aud"] == "ledgix-sdk"
+        assert decoded["aud"] == "bylaw-sdk"
 
 
 def test_verify_refetches_jwks_on_kid_miss(config: VaultConfig) -> None:
