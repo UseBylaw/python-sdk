@@ -1,6 +1,6 @@
 # Bylaw ALCV — Python SDK
 
-[![PyPI](https://img.shields.io/badge/pypi-v0.5.0-blue)](https://pypi.org/project/bylaw-python/)
+[![PyPI](https://img.shields.io/badge/pypi-v0.6.2-blue)](https://pypi.org/project/bylaw-python/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
