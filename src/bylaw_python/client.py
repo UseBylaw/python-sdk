@@ -1625,10 +1625,10 @@ class BylawClient:
         )
 
     def _hash_event_payload(self, payload: bytes) -> str:
-        return hashlib.sha256(b"bylaw.audit.event.v1\x00" + payload).hexdigest()
+        return hashlib.sha256(b"ledgix.audit.event.v1\x00" + payload).hexdigest()
 
     def _hash_checkpoint_payload(self, payload: bytes) -> str:
-        return hashlib.sha256(b"bylaw.audit.checkpoint.v1\x00" + payload).hexdigest()
+        return hashlib.sha256(b"ledgix.audit.checkpoint.v1\x00" + payload).hexdigest()
 
     def _hash_leaf(self, event_hash: str) -> str:
         return hashlib.sha256(b"\x00" + bytes.fromhex(event_hash)).hexdigest()

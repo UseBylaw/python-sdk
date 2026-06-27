@@ -54,7 +54,7 @@ COMPOSE_TEMPLATE = textwrap.dedent("""\
           VAULT_PORT: "8000"
           VAULT_JUDGE_URL: http://bylaw_dev_judge:8000
           VAULT_JWT_ISSUER: alcv-vault
-          VAULT_JWT_AUDIENCE: bylaw-sdk
+          VAULT_JWT_AUDIENCE: ledgix-sdk
           VAULT_JWT_TTL: "300"
           VAULT_KEY_ID: dev-key-001
           VAULT_ALLOW_INSECURE_DEV_MODE: "true"

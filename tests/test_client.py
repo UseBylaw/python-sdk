@@ -566,7 +566,7 @@ class TestLedgerProofVerification:
                 "tool_name": entry["tool_name"],
             }
         )
-        return cls._sha256_hex(b"bylaw.audit.event.v1\x00", payload)
+        return cls._sha256_hex(b"ledgix.audit.event.v1\x00", payload)
 
     @classmethod
     def _hash_leaf(cls, event_hash: str) -> str:
@@ -605,7 +605,7 @@ class TestLedgerProofVerification:
 
     @classmethod
     def _hash_checkpoint_payload(cls, payload: bytes) -> str:
-        return cls._sha256_hex(b"bylaw.audit.checkpoint.v1\x00", payload)
+        return cls._sha256_hex(b"ledgix.audit.checkpoint.v1\x00", payload)
 
     @respx.mock
     def test_fetch_ledger_and_manifests(self, client: BylawClient):
