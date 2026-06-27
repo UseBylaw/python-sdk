@@ -31,9 +31,9 @@ The SDK has been rebranded from Bylaw to Bylaw. See
 - Dev compose file: `docker-compose.bylaw.yml` (replaces `docker-compose.bylaw.yml`)
 
 #### Unchanged (Vault wire protocol)
-- JWT audience default remains `ledgix-sdk` until the Vault server rebrand ships
-- Audit ledger hash prefixes (`ledgix.audit.*`) unchanged for merkle compatibility
-- Webhook header `X-Ledgix-Signature` unchanged until Vault emits the new header
+- JWT audience default remains `bylaw-sdk` until the Vault server rebrand ships
+- Audit ledger hash prefixes (`bylaw.audit.*`) unchanged for merkle compatibility
+- Webhook header `X-Bylaw-Signature` unchanged until Vault emits the new header
 
 ## [0.4.0]
 

@@ -32,7 +32,7 @@ def make_token(
     payload: dict = {
         "sub": "clearance",
         "iss": "alcv-vault",
-        "aud": "ledgix-sdk",
+        "aud": "bylaw-sdk",
         "tool": "stripe_refund",
         "iat": datetime.now(timezone.utc),
         "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
@@ -54,7 +54,7 @@ def config(private_key: Ed25519PrivateKey) -> VaultConfig:
         vault_api_key="key",
         verify_jwt=True,
         jwt_issuer="alcv-vault",
-        jwt_audience="ledgix-sdk",
+        jwt_audience="bylaw-sdk",
         max_retries=0,
     )
 

@@ -70,9 +70,9 @@ Local dev scaffolding now writes `docker-compose.bylaw.yml` and `.env.bylaw`.
 
 These values remain the same until the Vault server-side rebrand ships:
 
-- JWT audience default: `ledgix-sdk`
-- Webhook signature header: `X-Ledgix-Signature`
-- Audit ledger hash domain: `ledgix.audit.event.v1` / `ledgix.audit.checkpoint.v1`
+- JWT audience default: `bylaw-sdk`
+- Webhook signature header: `X-Bylaw-Signature`
+- Audit ledger hash domain: `bylaw.audit.event.v1` / `bylaw.audit.checkpoint.v1`
 
 No action required unless you explicitly overrode these in your config.
 
