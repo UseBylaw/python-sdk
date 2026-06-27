@@ -384,7 +384,7 @@ class BylawClient:
             "processing_register_ref": request.processing_register_ref or "",
             "dataset_ref": request.dataset_ref or "",
         }
-        idem_headers = {"Idempotency-Key": str(uuid.uuid4())}
+        idem_headers = self._request_headers({"Idempotency-Key": str(uuid.uuid4())})
         try:
             response = self._sync_retry(
                 lambda: self._get_sync_client().post("/mint-token", json=mint_body, headers=idem_headers)
@@ -430,7 +430,7 @@ class BylawClient:
             "processing_register_ref": request.processing_register_ref or "",
             "dataset_ref": request.dataset_ref or "",
         }
-        idem_headers = {"Idempotency-Key": str(uuid.uuid4())}
+        idem_headers = self._request_headers({"Idempotency-Key": str(uuid.uuid4())})
         try:
             response = await self._async_retry(
                 lambda: self._get_async_client().post("/mint-token", json=mint_body, headers=idem_headers)
@@ -830,7 +830,10 @@ class BylawClient:
         deadline = time.monotonic() + self.config.review_timeout
         while time.monotonic() < deadline:
             time.sleep(self.config.review_poll_interval)
-            response = self._get_sync_client().get(f"/clearance-status/{clearance.request_id}")
+            response = self._get_sync_client().get(
+                f"/clearance-status/{clearance.request_id}",
+                headers=self._request_headers(),
+            )
             response.raise_for_status()
             clearance = ClearanceResponse.model_validate(response.json())
             if clearance.status not in {"processing", "pending_review"}:
@@ -851,7 +854,10 @@ class BylawClient:
         deadline = time.monotonic() + self.config.review_timeout
         while time.monotonic() < deadline:
             await asyncio.sleep(self.config.review_poll_interval)
-            response = await self._get_async_client().get(f"/clearance-status/{clearance.request_id}")
+            response = await self._get_async_client().get(
+                f"/clearance-status/{clearance.request_id}",
+                headers=self._request_headers(),
+            )
             response.raise_for_status()
             clearance = ClearanceResponse.model_validate(response.json())
             if clearance.status not in {"processing", "pending_review"}:

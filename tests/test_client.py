@@ -182,7 +182,10 @@ class TestRequestClearance:
         )
 
         sent = route.calls[0].request
-        assert sent.headers["traceparent"] == "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+        assert (
+            sent.headers["traceparent"]
+            == "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+        )
         body = json.loads(sent.content)
         assert body["context"]["telemetry"]["otel"] == {
             "trace_id": "0af7651916cd43dd8448eb211c80319c",
@@ -194,6 +197,48 @@ class TestRequestClearance:
         assert span.events[0][1]["ledgix.request_id"] == "req-001"
         assert span.events[0][1]["ledgix.decision_status"] == "approved"
         assert span.events[0][1]["ledgix.latency_ms"] == 12
+
+    @respx.mock
+    def test_otel_active_span_adds_context_headers_to_cache_hit_mint_token(
+        self, vault_config: VaultConfig, approved_response: dict, sample_jwt: str
+    ):
+        span = _FakeSpan()
+        _set_otel_api_for_tests((_FakeTrace(span), _FakePropagate()))
+        client = BylawClient(vault_config.model_copy(update={"decision_cache_enabled": True}))
+        approved_response.update(
+            {
+                "policy_version_id": "pv-1",
+                "policy_content_hash": "sha256:abc",
+                "confidence_bucket": "extra_high",
+                "minimum_confidence_bucket": "medium",
+            }
+        )
+        respx.post("https://vault.test/request-clearance").mock(
+            return_value=Response(200, json=approved_response)
+        )
+        mint_route = respx.post("https://vault.test/mint-token").mock(
+            return_value=Response(
+                200,
+                json={
+                    "request_id": "req-mint-001",
+                    "token": sample_jwt,
+                    "decision_status": "approved",
+                    "reason": "Policy passed",
+                },
+            )
+        )
+
+        request = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45})
+        client.request_clearance(request)
+        client.request_clearance(request)
+
+        sent = mint_route.calls[0].request
+        assert (
+            sent.headers["traceparent"]
+            == "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+        )
+        assert "Idempotency-Key" in sent.headers
+        client.close()
 
     @respx.mock
     def test_otel_absent_is_noop(self, client: BylawClient, approved_response: dict):
@@ -276,6 +321,39 @@ class TestRequestClearance:
         assert result.is_approved is True
         assert result.request_id == "req-processing-001"
 
+    @respx.mock
+    def test_otel_active_span_adds_context_headers_to_processing_poll(
+        self, vault_config: VaultConfig, approved_response: dict
+    ):
+        span = _FakeSpan()
+        _set_otel_api_for_tests((_FakeTrace(span), _FakePropagate()))
+        client = BylawClient(vault_config.model_copy(update={"review_poll_interval": 0.0}))
+        processing_response = {
+            "status": "processing",
+            "decision_status": "denied",
+            "token": None,
+            "reason": "Queued",
+            "request_id": "req-processing-001",
+            "confidence_bucket": "none",
+            "minimum_confidence_bucket": "medium",
+        }
+        respx.post("https://vault.test/request-clearance").mock(
+            return_value=Response(202, json=processing_response)
+        )
+        poll_route = respx.get("https://vault.test/clearance-status/req-processing-001").mock(
+            return_value=Response(200, json={**approved_response, "request_id": "req-processing-001"})
+        )
+
+        result = client.request_clearance(ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45}))
+
+        sent = poll_route.calls[0].request
+        assert (
+            sent.headers["traceparent"]
+            == "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+        )
+        assert result.is_approved is True
+        client.close()
+
 
 # ──────────────────────────────────────────────────────────────────────
 # Clearance — async
@@ -320,13 +398,98 @@ class TestAsyncRequestClearance:
         )
 
         sent = route.calls[0].request
-        assert sent.headers["traceparent"] == "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+        assert (
+            sent.headers["traceparent"]
+            == "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+        )
         body = json.loads(sent.content)
         assert body["context"]["telemetry"]["otel"]["trace_id"] == "0af7651916cd43dd8448eb211c80319c"
         assert body["context"]["telemetry"]["otel"]["span_id"] == "b7ad6b7169203331"
         assert span.events[0][0] == "ledgix.clearance.decision"
         assert span.events[0][1]["ledgix.request_id"] == "req-001"
         assert result.is_approved is True
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_otel_active_span_adds_context_headers_to_cache_hit_mint_token_async(
+        self, vault_config: VaultConfig, approved_response: dict, sample_jwt: str
+    ):
+        span = _FakeSpan()
+        _set_otel_api_for_tests((_FakeTrace(span), _FakePropagate()))
+        client = BylawClient(vault_config.model_copy(update={"decision_cache_enabled": True}))
+        approved_response.update(
+            {
+                "policy_version_id": "pv-1",
+                "policy_content_hash": "sha256:abc",
+                "confidence_bucket": "extra_high",
+                "minimum_confidence_bucket": "medium",
+            }
+        )
+        respx.post("https://vault.test/request-clearance").mock(
+            return_value=Response(200, json=approved_response)
+        )
+        mint_route = respx.post("https://vault.test/mint-token").mock(
+            return_value=Response(
+                200,
+                json={
+                    "request_id": "req-mint-async-001",
+                    "token": sample_jwt,
+                    "decision_status": "approved",
+                    "reason": "Policy passed",
+                },
+            )
+        )
+
+        request = ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45})
+        await client.arequest_clearance(request)
+        await client.arequest_clearance(request)
+
+        sent = mint_route.calls[0].request
+        assert (
+            sent.headers["traceparent"]
+            == "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+        )
+        assert "Idempotency-Key" in sent.headers
+        await client.aclose()
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_otel_active_span_adds_context_headers_to_processing_poll_async(
+        self, vault_config: VaultConfig, approved_response: dict
+    ):
+        span = _FakeSpan()
+        _set_otel_api_for_tests((_FakeTrace(span), _FakePropagate()))
+        client = BylawClient(vault_config.model_copy(update={"review_poll_interval": 0.0}))
+        processing_response = {
+            "status": "processing",
+            "decision_status": "denied",
+            "token": None,
+            "reason": "Queued",
+            "request_id": "req-processing-async-001",
+            "confidence_bucket": "none",
+            "minimum_confidence_bucket": "medium",
+        }
+        respx.post("https://vault.test/request-clearance").mock(
+            return_value=Response(202, json=processing_response)
+        )
+        poll_route = respx.get("https://vault.test/clearance-status/req-processing-async-001").mock(
+            return_value=Response(
+                200,
+                json={**approved_response, "request_id": "req-processing-async-001"},
+            )
+        )
+
+        result = await client.arequest_clearance(
+            ClearanceRequest(tool_name="stripe_refund", tool_args={"amount": 45})
+        )
+
+        sent = poll_route.calls[0].request
+        assert (
+            sent.headers["traceparent"]
+            == "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+        )
+        assert result.is_approved is True
+        await client.aclose()
 
     @respx.mock
     @pytest.mark.asyncio
