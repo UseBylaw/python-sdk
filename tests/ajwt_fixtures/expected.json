@@ -1,9 +1,9 @@
 {
   "algorithm": "EdDSA",
-  "audience": "ledgix-sdk",
+  "audience": "bylaw-sdk",
   "claims": {
     "agent_id": "agent-fixture-01",
-    "aud": "ledgix-sdk",
+    "aud": "bylaw-sdk",
     "decision": "approved",
     "iss": "alcv-vault",
     "policy_id": "policy-fixture-refund-01",

@@ -8,13 +8,13 @@ A-JWT, an expired A-JWT, and ``expected.json`` carrying the canonical claims.
 These tests prove the SDK can independently verify the exact bytes Vault emits,
 using PyJWT (a hard dependency via ``PyJWT[crypto]``):
 
-* the valid token verifies under EdDSA with ``aud = ledgix-sdk`` and its claims
+* the valid token verifies under EdDSA with ``aud = bylaw-sdk`` and its claims
   match ``expected.json`` exactly (including ``tool_args_hash``);
 * the expired token raises ``ExpiredSignatureError``;
 * a tampered token raises a signature/decode failure.
 
-NOTE: the wire audience stays ``ledgix-sdk`` even after the Bylaw rebrand —
-Vault validates against ``VAULT_JWT_AUDIENCE=ledgix-sdk``. Do not "fix" it.
+NOTE: the A-JWT wire audience is ``bylaw-sdk`` (Vault's ``VAULT_JWT_AUDIENCE``
+default). The Bylaw rebrand renamed the wire protocol too (formerly ``ledgix-sdk``).
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ import pytest
 from jwt.algorithms import OKPAlgorithm
 
 FIXTURE_DIR = Path(__file__).parent / "ajwt_fixtures"
-AUDIENCE = "ledgix-sdk"
+AUDIENCE = "bylaw-sdk"
 ALGORITHMS = ["EdDSA"]
 
 
@@ -148,7 +148,7 @@ def test_tampered_token_raises_signature_error():
 
 
 def test_wrong_audience_rejected():
-    """A token minted for ledgix-sdk must not verify under a different audience."""
+    """A token minted for bylaw-sdk must not verify under a different audience."""
     token = _read("token_valid.jwt")
     with pytest.raises(jwt.InvalidAudienceError):
         jwt.decode(
