@@ -13,8 +13,6 @@ Usage:
 
 from __future__ import annotations
 
-import json
-import sys
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -22,10 +20,8 @@ import jwt
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from bylaw_python import (
-    ClearanceDeniedError,
     BylawClient,
     VaultConfig,
-    vault_enforce,
 )
 
 # ──────────────────────────────────────────────────────────────────────
@@ -71,18 +67,17 @@ def _mock_clearance_decision(tool_name: str, tool_args: dict) -> dict:
             "reason": "Policy check passed — refund within limits",
             "request_id": payload["request_id"],
         }
-    else:
-        reason = []
-        if amount > 100:
-            reason.append(f"Amount ${amount} exceeds $100 limit")
-        if recipient == "agent_personal_account":
-            reason.append("Recipient is not the original customer")
-        return {
-            "approved": False,
-            "token": None,
-            "reason": "; ".join(reason),
-            "request_id": f"demo-{int(time.time())}",
-        }
+    reason = []
+    if amount > 100:
+        reason.append(f"Amount ${amount} exceeds $100 limit")
+    if recipient == "agent_personal_account":
+        reason.append("Recipient is not the original customer")
+    return {
+        "approved": False,
+        "token": None,
+        "reason": "; ".join(reason),
+        "request_id": f"demo-{int(time.time())}",
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -123,7 +118,7 @@ def run_demo():
         verify_jwt=False,
         agent_id="demo-agent",
     )
-    client = BylawClient(config=config)
+    _client = BylawClient(config=config)
 
     # ── Scenario A: Good Agent ─────────────────────────────────────
     print("\n" + "─" * 64)

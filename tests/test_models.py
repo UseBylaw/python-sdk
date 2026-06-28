@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from bylaw_python.models import (
     ClearanceRequest,
@@ -154,7 +155,7 @@ class TestPolicyRegistration:
         assert "stripe_refund" in policy.tools
 
     def test_missing_required_field(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             PolicyRegistration()  # policy_id is required
 
 

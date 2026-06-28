@@ -7,7 +7,7 @@ import fnmatch
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 MANIFEST_FILENAMES = ("bylaw.yaml", "bylaw.yml", "bylaw.json")
 
@@ -202,7 +202,7 @@ def _find_default_manifest() -> Path:
 def _parse_file(path: Path) -> dict[str, Any]:
     if path.suffix in (".yaml", ".yml"):
         try:
-            import yaml  # type: ignore[import-untyped]
+            import yaml
         except ImportError as exc:
             raise ImportError(
                 "PyYAML is required to load YAML manifests. "
@@ -211,7 +211,7 @@ def _parse_file(path: Path) -> dict[str, Any]:
             ) from exc
         return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if path.suffix == ".json":
-        return json.loads(path.read_text(encoding="utf-8"))
+        return cast("dict[str, Any]", json.loads(path.read_text(encoding="utf-8")))
     raise ValueError(
         f"Unsupported manifest format: {path.suffix!r}. "
         "Use .yaml, .yml, or .json."

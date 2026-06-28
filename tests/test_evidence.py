@@ -9,8 +9,7 @@ import respx
 from httpx import ConnectError, Response
 
 import bylaw_python as bylaw
-from bylaw_python import VaultConfig
-from bylaw_python import ChallengeResolution, set_challenge_handler
+from bylaw_python import ChallengeResolution, VaultConfig, set_challenge_handler
 from bylaw_python.enforce import enforce
 from bylaw_python.evidence import set_session_store
 from bylaw_python.exceptions import EvidenceBlockedError
@@ -355,7 +354,7 @@ def test_configure_resets_default_session_store():
 @respx.mock
 def test_evidence_session_context_overrides_customer():
     bylaw.configure(_config("observe"))
-    facts = respx.post("https://vault.test/v1/evidence/facts").mock(side_effect=_facts_side_effect)
+    respx.post("https://vault.test/v1/evidence/facts").mock(side_effect=_facts_side_effect)
     clearance = respx.post("https://vault.test/request-clearance").mock(
         return_value=Response(200, json={
             "status": "approved", "decision_status": "approved", "reason": "ok", "request_id": "req-1",

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .client import BylawClient
@@ -37,8 +37,8 @@ class PendingApproval:
     def __init__(
         self,
         request_id: str,
-        client: "BylawClient",
-        initial_response: "ClearanceResponse",
+        client: BylawClient,
+        initial_response: ClearanceResponse,
     ) -> None:
         self._request_id = request_id
         self._client = client
@@ -49,7 +49,7 @@ class PendingApproval:
         """The Vault's unique ID for this clearance request."""
         return self._request_id
 
-    def wait(self, timeout: float | None = None) -> "ClearanceResponse":
+    def wait(self, timeout: float | None = None) -> ClearanceResponse:
         """Block until the reviewer decides, then return the :class:`ClearanceResponse`.
 
         Args:
@@ -83,7 +83,7 @@ class PendingApproval:
 
         raise ManualReviewTimeoutError(self._request_id)
 
-    async def wait_async(self, timeout: float | None = None) -> "ClearanceResponse":
+    async def wait_async(self, timeout: float | None = None) -> ClearanceResponse:
         """Async variant of :meth:`wait`."""
         import asyncio
 

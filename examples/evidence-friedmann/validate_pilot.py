@@ -19,10 +19,10 @@ from __future__ import annotations
 import os
 import sys
 
+import tools
+
 import bylaw_python as bylaw
 from bylaw_python import BylawClient, VaultConfig
-
-import tools
 
 CUSTOMER = "cust_friedmann_pilot"
 SESSION = "sess-friedmann-pilot"
@@ -105,7 +105,7 @@ def main() -> int:
         grounded_ok = True
         try:
             tools.send_advisor_response(CUSTOMER, GROUNDED)
-        except bylaw.EvidenceBlockedError as exc:
+        except bylaw.EvidenceBlockedError:
             grounded_ok = False
         check("4. Grounded 12% is allowed (recomputed from balances)", grounded_ok)
 

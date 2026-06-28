@@ -19,7 +19,7 @@ except ImportError as exc:
     ) from exc
 
 
-class BylawCallbackHandler(BaseCallbackHandler):
+class BylawCallbackHandler(BaseCallbackHandler):  # type: ignore[misc]  # optional langchain base is untyped when the extra isn't installed
     """LangChain callback handler that intercepts tool calls for Vault clearance.
 
     Usage::
@@ -71,7 +71,7 @@ class BylawCallbackHandler(BaseCallbackHandler):
         self.client.request_clearance(request)
 
 
-class BylawTool(BaseTool):
+class BylawTool(BaseTool):  # type: ignore[misc]  # optional langchain base is untyped when the extra isn't installed
     """Wraps an existing LangChain tool with Vault clearance enforcement.
 
     Usage with explicit client::
@@ -130,7 +130,7 @@ class BylawTool(BaseTool):
         - ``BylawTool.wrap(tool, policy_id=...)`` — uses global client from :func:`bylaw_python.configure`
         """
         if isinstance(client_or_tool, BylawClient):
-            return cls(inner_tool=tool, client=client_or_tool, policy_id=policy_id)  # type: ignore[arg-type]
+            return cls(inner_tool=tool, client=client_or_tool, policy_id=policy_id)
         # client_or_tool is actually the tool; no explicit client
         return cls(inner_tool=client_or_tool, client=None, policy_id=policy_id)
 

@@ -13,11 +13,15 @@ import threading
 import time
 import uuid
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlencode
 
 import httpx
 import jwt
+
+if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.asymmetric.ed448 import Ed448PublicKey
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 _RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({429, 500, 502, 503, 504})
 
@@ -31,8 +35,8 @@ _RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({429, 500, 502, 503, 504})
 MAX_RETRY_AFTER_SECONDS: float = 60.0
 MAX_CONSECUTIVE_429: int = 10
 
-from .config import VaultConfig
-from .exceptions import (
+from .config import VaultConfig  # noqa: E402
+from .exceptions import (  # noqa: E402
     ClearanceDeniedError,
     EvidenceError,
     ManualReviewTimeoutError,
@@ -58,8 +62,8 @@ def _parse_retry_after(value: str | None) -> float | None:
     if secs < 0:
         return None
     return min(secs, MAX_RETRY_AFTER_SECONDS)
-from .pending import PendingApproval
-from .models import (
+from .models import (  # noqa: E402
+    _MISSING,
     Challenge,
     CheckActionRequest,
     CheckActionResult,
@@ -68,21 +72,21 @@ from .models import (
     ClearanceResponse,
     ConsistencyProof,
     EvidenceGraph,
-    ResolveChallengeRequest,
     InclusionProof,
-    LedgerEntry,
     LedgerCheckpoint,
+    LedgerEntry,
     LedgerKeyVersion,
-    LedgerProofBundle,
     LedgerManifest,
+    LedgerProofBundle,
     LedgerVerificationResult,
     PolicyRegistration,
     PolicyRegistrationResponse,
-    RegisterFactRequest,
     RegisteredFact,
-    _MISSING,
+    RegisterFactRequest,
+    ResolveChallengeRequest,
 )
-from .otel import current_otel_metadata, inject_otel_headers, record_clearance_event
+from .otel import current_otel_metadata, inject_otel_headers, record_clearance_event  # noqa: E402
+from .pending import PendingApproval  # noqa: E402
 
 
 class BylawClient:
@@ -111,7 +115,7 @@ class BylawClient:
         self._decision_cache: Any = None  # cachetools.TTLCache or None
         self._decision_cache_lock = threading.Lock()
         from cachetools import TTLCache  # already a hard dep via decision_cache path
-        self._seen_jtis: TTLCache = TTLCache(
+        self._seen_jtis: TTLCache[str, bool] = TTLCache(
             maxsize=self.config.replay_cache_size,
             ttl=self.config.max_token_lifetime_seconds,
         )
@@ -297,7 +301,7 @@ class BylawClient:
         context["telemetry"] = telemetry
         return request.model_copy(update={"context": context})
 
-    def create_delegated_client(self, parent_jti: str) -> "BylawClient":
+    def create_delegated_client(self, parent_jti: str) -> BylawClient:
         """Return a new client that auto-injects *parent_jti* on every clearance request.
 
         The returned client shares the same ``VaultConfig`` but does not share
@@ -327,7 +331,7 @@ class BylawClient:
         if self._decision_cache is None or not key:
             return None
         with self._decision_cache_lock:
-            return self._decision_cache.get(key)
+            return cast("dict[str, Any] | None", self._decision_cache.get(key))
 
     def _cache_put(self, key: str, envelope: dict[str, Any]) -> None:
         if self._decision_cache is None or not key:
@@ -1044,7 +1048,7 @@ class BylawClient:
         manifests: list[LedgerManifest | dict[str, Any]] | None = None,
     ) -> LedgerVerificationResult:
         """Verify ledger event receipts and checkpoint signatures offline using the Vault JWKS."""
-        entries = (
+        resolved_entries: list[LedgerEntry] = (
             [item if isinstance(item, LedgerEntry) else LedgerEntry.model_validate(item) for item in entries]
             if entries is not None
             else self.fetch_ledger()
@@ -1056,7 +1060,7 @@ class BylawClient:
         )
         if self._jwks_cache is None:
             self.fetch_jwks()
-        return self._verify_ledger_proof(entries, checkpoints)
+        return self._verify_ledger_proof(resolved_entries, checkpoints)
 
     async def averify_ledger_proof(
         self,
@@ -1064,7 +1068,7 @@ class BylawClient:
         manifests: list[LedgerManifest | dict[str, Any]] | None = None,
     ) -> LedgerVerificationResult:
         """Async variant of ``verify_ledger_proof``."""
-        entries = (
+        resolved_entries: list[LedgerEntry] = (
             [item if isinstance(item, LedgerEntry) else LedgerEntry.model_validate(item) for item in entries]
             if entries is not None
             else await self.afetch_ledger()
@@ -1076,7 +1080,7 @@ class BylawClient:
         )
         if self._jwks_cache is None:
             await self.afetch_jwks()
-        return self._verify_ledger_proof(entries, checkpoints)
+        return self._verify_ledger_proof(resolved_entries, checkpoints)
 
     def verify_ledger_proof_bundle(
         self,
@@ -1180,7 +1184,10 @@ class BylawClient:
                     "refetch JWKS or upgrade Vault"
                 )
 
-            public_key = jwt.algorithms.OKPAlgorithm.from_jwk(json.dumps(key_data))
+            public_key = cast(
+                "Ed25519PublicKey | Ed448PublicKey",
+                jwt.algorithms.OKPAlgorithm.from_jwk(json.dumps(key_data)),
+            )
 
             decoded = jwt.decode(
                 token,

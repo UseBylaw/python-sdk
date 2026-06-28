@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import time
 
-import httpx
 import pytest
 import respx
 from httpx import Response

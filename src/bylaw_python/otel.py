@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from importlib import import_module
-from typing import Any
+from typing import Any, cast
 
 from .models import ClearanceRequest, ClearanceResponse
 
@@ -11,7 +11,7 @@ _otel_override: Any = _UNSET
 
 def _load_otel() -> tuple[Any, Any] | None:
     if _otel_override is not _UNSET:
-        return _otel_override
+        return cast("tuple[Any, Any] | None", _otel_override)
     try:
         trace = import_module("opentelemetry.trace")
         propagate = import_module("opentelemetry.propagate")

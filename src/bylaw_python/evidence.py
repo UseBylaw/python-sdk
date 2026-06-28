@@ -12,7 +12,8 @@ import contextlib
 import contextvars
 import inspect
 import logging
-from typing import Any, Callable, Iterator
+from collections.abc import Callable, Iterator
+from typing import Any
 
 from .client import BylawClient
 from .exceptions import EvidenceBlockedError, EvidenceError, VaultConnectionError
@@ -391,6 +392,7 @@ def guard_output(
             return final
         _block(final)
     _block(result_check)
+    return None  # unreachable: _block always raises
 
 
 # ---------------------------------------------------------------------------
@@ -477,6 +479,7 @@ async def aguard_output(
             return final
         _block(final)
     _block(result_check)
+    return None  # unreachable: _block always raises
 
 
 async def aobserve_source(

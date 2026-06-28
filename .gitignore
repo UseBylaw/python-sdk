@@ -31,3 +31,6 @@ htmlcov/
 # Env files
 .env
 .env.local
+
+# local lint/type tooling venv (not committed)
+.lintvenv/

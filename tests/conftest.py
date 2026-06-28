@@ -8,12 +8,9 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
-import respx
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from httpx import Response
 
 from bylaw_python import BylawClient, VaultConfig
-
 
 # ──────────────────────────────────────────────────────────────────────
 # Crypto fixtures

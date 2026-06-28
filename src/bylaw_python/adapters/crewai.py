@@ -3,9 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Type
-
-from pydantic import BaseModel
+from typing import Any
 
 from ..client import BylawClient
 from ..exceptions import ClearanceDeniedError
@@ -20,7 +18,7 @@ except ImportError as exc:
     ) from exc
 
 
-class BylawCrewAITool(CrewAIBaseTool):
+class BylawCrewAITool(CrewAIBaseTool):  # type: ignore[misc]  # optional crewai base is untyped when the extra isn't installed
     """Wraps a CrewAI tool with Vault clearance enforcement.
 
     Usage with explicit client::
@@ -79,7 +77,7 @@ class BylawCrewAITool(CrewAIBaseTool):
         - ``BylawCrewAITool.wrap(tool, policy_id=...)`` — uses global client from :func:`bylaw_python.configure`
         """
         if isinstance(client_or_tool, BylawClient):
-            return cls(inner_tool=tool, client=client_or_tool, policy_id=policy_id)  # type: ignore[arg-type]
+            return cls(inner_tool=tool, client=client_or_tool, policy_id=policy_id)
         return cls(inner_tool=client_or_tool, client=None, policy_id=policy_id)
 
     def _run(self, **kwargs: Any) -> Any:

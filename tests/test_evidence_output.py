@@ -11,7 +11,8 @@ from httpx import Response
 
 import bylaw_python as bylaw
 from bylaw_python import VaultConfig, guard_output
-from bylaw_python.enforce import enforce, _get_default_client as get_default_client
+from bylaw_python.enforce import _get_default_client as get_default_client
+from bylaw_python.enforce import enforce
 from bylaw_python.evidence import set_session_store
 from bylaw_python.exceptions import EvidenceBlockedError, EvidenceError
 from bylaw_python.manifest import EvidenceRule, load_manifest
