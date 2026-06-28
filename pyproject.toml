@@ -53,9 +53,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/bylaw-dev/python-sdk"
+Homepage = "https://github.com/UseBylaw/python-sdk"
 Documentation = "https://docs.bylaw.dev"
-Repository = "https://github.com/bylaw-dev/python-sdk"
+Repository = "https://github.com/UseBylaw/python-sdk"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bylaw_python"]
