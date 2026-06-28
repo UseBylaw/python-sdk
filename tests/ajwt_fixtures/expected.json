@@ -1,0 +1,28 @@
+{
+  "algorithm": "EdDSA",
+  "audience": "ledgix-sdk",
+  "claims": {
+    "agent_id": "agent-fixture-01",
+    "aud": "ledgix-sdk",
+    "decision": "approved",
+    "iss": "alcv-vault",
+    "policy_id": "policy-fixture-refund-01",
+    "session_id": "sess-fixture-01",
+    "sub": "clearance",
+    "tool": "stripe.refund.create",
+    "tool_args_hash": "sha256:4f8c8b91570c32f3fa64837640b869fd27020591efec8409eddd0a12a4cd6930"
+  },
+  "expired_exp_unix": 1577837100,
+  "expired_jti": "req-fixture-expired-0001",
+  "issuer": "alcv-vault",
+  "kid": "vault-test-key-001",
+  "tool_args": {
+    "amount": 1000,
+    "currency": "usd",
+    "reason": "duplicate_charge"
+  },
+  "tool_args_hash": "sha256:4f8c8b91570c32f3fa64837640b869fd27020591efec8409eddd0a12a4cd6930",
+  "valid_exp_unix": 4070908800,
+  "valid_iat_unix": 1767225600,
+  "valid_jti": "req-fixture-valid-0001"
+}

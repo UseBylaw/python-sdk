@@ -1,0 +1,28 @@
+{
+  "customer_id": "cust_4421",
+  "session_id": "sess_9f3c1a2b",
+  "mode": "enforce",
+  "action_type": "update_profile",
+  "workflow": "advisory_chat",
+  "facts": [
+    {
+      "fact_id": "fact_abc123"
+    }
+  ],
+  "proposed_mutations": [
+    {
+      "target": "profile",
+      "field": "risk_tolerance",
+      "new_value": "aggressive",
+      "source_fact_id": "fact_abc123",
+      "source_type": "document"
+    }
+  ],
+  "user_intent": {
+    "profile_update_explicitly_requested": true
+  },
+  "current_turn": 3,
+  "context": {
+    "channel": "web"
+  }
+}

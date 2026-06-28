@@ -1,0 +1,32 @@
+{
+  "customer_id": "cust_4421",
+  "session_id": "sess_9f3c1a2b",
+  "mode": "enforce",
+  "action_type": "generate_recommendation",
+  "workflow": "advisory_chat",
+  "response_text": "Based on your moderate risk tolerance, consider a balanced 60/40 portfolio.",
+  "facts": [
+    {
+      "fact_id": "fact_abc123"
+    }
+  ],
+  "output_claims": [
+    {
+      "claim_text": "Your risk tolerance is moderate.",
+      "claim_type": "fact_reference",
+      "value": "moderate",
+      "source_fact_id": "fact_abc123",
+      "source_type": "document",
+      "source_id": "doc_kyc_2026_03",
+      "source_field": "risk_tolerance"
+    }
+  ],
+  "user_intent": {
+    "recommendation_explicitly_requested": true,
+    "financial_response_explicitly_allowed": true
+  },
+  "current_turn": 4,
+  "context": {
+    "channel": "web"
+  }
+}
