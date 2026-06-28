@@ -1,10 +1,7 @@
 # Tests for the SDK-side decision cache (Milestone B3b).
 from __future__ import annotations
 
-import hashlib
-import json
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
 
 import jwt
 import pytest
@@ -14,8 +11,7 @@ from httpx import Response
 
 from bylaw_python import BylawClient, VaultConfig
 from bylaw_python.exceptions import ClearanceDeniedError, VaultConnectionError
-from bylaw_python.models import ClearanceRequest, ClearanceResponse
-
+from bylaw_python.models import ClearanceRequest
 
 # ---------------------------------------------------------------------------
 # Helpers

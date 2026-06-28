@@ -3,10 +3,11 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 
 class BylawError(Exception):
     """Base exception for all Bylaw SDK errors."""
-    pass
 
 
 class ClearanceDeniedError(BylawError):
@@ -99,7 +100,7 @@ class ReviewPendingError(BylawError):
     the review without blocking the current thread/coroutine.
     """
 
-    def __init__(self, pending_approval: "Any") -> None:  # noqa: F821
+    def __init__(self, pending_approval: Any) -> None:  # noqa: F821
         self.pending_approval = pending_approval
         super().__init__(f"Clearance pending review (request_id={pending_approval.request_id})")
 

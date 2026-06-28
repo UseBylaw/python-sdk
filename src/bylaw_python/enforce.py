@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import contextvars
 import functools
 import importlib
@@ -12,8 +11,9 @@ import logging
 import pkgutil
 import sys
 import types
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 from .client import BylawClient
 from .config import VaultConfig
@@ -28,7 +28,7 @@ from .evidence import (
     guard_output,
     observe_source,
 )
-from .exceptions import ClearanceDeniedError, ReviewPendingError
+from .exceptions import ReviewPendingError
 from .manifest import EvidenceRule, Manifest, ManifestRule, load_manifest
 from .models import ClearanceRequest, ClearanceResponse
 from .pending import PendingApproval
@@ -155,10 +155,7 @@ def auto_instrument(
     """
     global _manifest
 
-    if isinstance(manifest, Manifest):
-        _manifest = manifest
-    else:
-        _manifest = load_manifest(manifest)
+    _manifest = manifest if isinstance(manifest, Manifest) else load_manifest(manifest)
 
     return sorted(_instrument_module(module, _manifest, recurse=recurse))
 
@@ -369,6 +366,7 @@ def enforce(
                         raise
 
                 if ev_action and evidence_on:
+                    assert evidence is not None  # guaranteed by ev_action
                     await aguard_action(client, evidence, tool_args)
 
                 token = _current_clearance.set(clearance)
@@ -378,12 +376,14 @@ def enforce(
                     _current_clearance.reset(token)
 
                 if ev_source and evidence_on:
+                    assert evidence is not None  # guaranteed by ev_source
                     try:
                         await aobserve_source(client, evidence, tool_args, result)
                     except Exception:  # observation must never break the agent
                         _evidence_log.warning("evidence: source observation failed", exc_info=True)
                 output_mode = client.config.evidence_output_mode
                 if ev_output and output_mode != "off":
+                    assert evidence is not None  # guaranteed by ev_output
                     # Output enforcement is opt-in via its own mode. In observe it
                     # records and returns; in enforce an ungrounded number raises.
                     if output_mode == "enforce":
@@ -409,42 +409,53 @@ def enforce(
 
             return async_wrapper  # type: ignore[return-value]
 
-        else:
 
-            @functools.wraps(func)
-            def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-                client = _get_default_client()
-                tool_args = _extract_tool_args(func, args, kwargs)
-                evidence_on = client.config.evidence_mode != "off"
+        @functools.wraps(func)
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+            client = _get_default_client()
+            tool_args = _extract_tool_args(func, args, kwargs)
+            evidence_on = client.config.evidence_mode != "off"
 
-                clearance: ClearanceResponse | None = None
-                if do_clearance:
-                    try:
-                        clearance = client.request_clearance(_build_request(client, tool_args))
-                    except ReviewPendingError as exc:
-                        if on_review_pending is not None:
-                            on_review_pending(exc.pending_approval)
-                        raise
-
-                if ev_action and evidence_on:
-                    guard_action(client, evidence, tool_args)
-
-                token = _current_clearance.set(clearance)
+            clearance: ClearanceResponse | None = None
+            if do_clearance:
                 try:
-                    result = func(*args, **kwargs)
-                finally:
-                    _current_clearance.reset(token)
+                    clearance = client.request_clearance(_build_request(client, tool_args))
+                except ReviewPendingError as exc:
+                    if on_review_pending is not None:
+                        on_review_pending(exc.pending_approval)
+                    raise
 
-                if ev_source and evidence_on:
+            if ev_action and evidence_on:
+                assert evidence is not None  # guaranteed by ev_action
+                guard_action(client, evidence, tool_args)
+
+            token = _current_clearance.set(clearance)
+            try:
+                result = func(*args, **kwargs)
+            finally:
+                _current_clearance.reset(token)
+
+            if ev_source and evidence_on:
+                assert evidence is not None  # guaranteed by ev_source
+                try:
+                    observe_source(client, evidence, tool_args, result)
+                except Exception:  # observation must never break the agent
+                    _evidence_log.warning("evidence: source observation failed", exc_info=True)
+            output_mode = client.config.evidence_output_mode
+            if ev_output and output_mode != "off":
+                assert evidence is not None  # guaranteed by ev_output
+                # Output enforcement is opt-in via its own mode. In observe it
+                # records and returns; in enforce an ungrounded number raises.
+                if output_mode == "enforce":
+                    guard_output(
+                        client,
+                        _extract_response_text(evidence, tool_args, result),
+                        rule=evidence,
+                        tool_args=tool_args,
+                        result=result,
+                    )
+                else:
                     try:
-                        observe_source(client, evidence, tool_args, result)
-                    except Exception:  # observation must never break the agent
-                        _evidence_log.warning("evidence: source observation failed", exc_info=True)
-                output_mode = client.config.evidence_output_mode
-                if ev_output and output_mode != "off":
-                    # Output enforcement is opt-in via its own mode. In observe it
-                    # records and returns; in enforce an ungrounded number raises.
-                    if output_mode == "enforce":
                         guard_output(
                             client,
                             _extract_response_text(evidence, tool_args, result),
@@ -452,20 +463,11 @@ def enforce(
                             tool_args=tool_args,
                             result=result,
                         )
-                    else:
-                        try:
-                            guard_output(
-                                client,
-                                _extract_response_text(evidence, tool_args, result),
-                                rule=evidence,
-                                tool_args=tool_args,
-                                result=result,
-                            )
-                        except Exception:  # output observation must never break the agent
-                            _evidence_log.warning("evidence: output observation failed", exc_info=True)
-                return result
+                    except Exception:  # output observation must never break the agent
+                        _evidence_log.warning("evidence: output observation failed", exc_info=True)
+            return result
 
-            return sync_wrapper  # type: ignore[return-value]
+        return sync_wrapper  # type: ignore[return-value]
 
     return decorator
 
@@ -606,26 +608,25 @@ def vault_enforce(
 
             return async_wrapper  # type: ignore[return-value]
 
-        else:
 
-            @functools.wraps(func)
-            def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-                request = ClearanceRequest(
-                    tool_name=resolved_name,
-                    tool_args=_extract_tool_args(func, args, kwargs),
-                    agent_id=client.config.agent_id,
-                    session_id=client.config.session_id,
-                    context={**(context or {}), **({"policy_id": policy_id} if policy_id else {})},
-                    data_categories=data_categories,
-                    purpose=purpose,
-                    processing_register_ref=processing_register_ref,
-                    dataset_ref=dataset_ref,
-                )
-                clearance = client.request_clearance(request)
-                kwargs["_clearance"] = clearance
-                return func(*args, **kwargs)
+        @functools.wraps(func)
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+            request = ClearanceRequest(
+                tool_name=resolved_name,
+                tool_args=_extract_tool_args(func, args, kwargs),
+                agent_id=client.config.agent_id,
+                session_id=client.config.session_id,
+                context={**(context or {}), **({"policy_id": policy_id} if policy_id else {})},
+                data_categories=data_categories,
+                purpose=purpose,
+                processing_register_ref=processing_register_ref,
+                dataset_ref=dataset_ref,
+            )
+            clearance = client.request_clearance(request)
+            kwargs["_clearance"] = clearance
+            return func(*args, **kwargs)
 
-            return sync_wrapper  # type: ignore[return-value]
+        return sync_wrapper  # type: ignore[return-value]
 
     return decorator
 

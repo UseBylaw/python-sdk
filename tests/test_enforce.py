@@ -7,10 +7,9 @@ import pytest
 import respx
 from httpx import Response
 
-from bylaw_python import BylawClient, VaultConfig
+from bylaw_python import BylawClient
 from bylaw_python.enforce import VaultContext, vault_enforce
 from bylaw_python.exceptions import ClearanceDeniedError
-
 
 # ──────────────────────────────────────────────────────────────────────
 # Decorator tests — sync
@@ -172,9 +171,8 @@ class TestVaultContext:
             return_value=Response(200, json=denied_response)
         )
 
-        with pytest.raises(ClearanceDeniedError):
-            with VaultContext(client, "refund_tool", {"amount": 5000}):
-                pass  # Should never reach here
+        with pytest.raises(ClearanceDeniedError), VaultContext(client, "refund_tool", {"amount": 5000}):
+            pass  # Should never reach here
 
     @respx.mock
     @pytest.mark.asyncio
@@ -204,7 +202,7 @@ class TestVaultContext:
             return_value=Response(200, json=approved_response)
         )
 
-        with VaultContext(client, "refund_tool", {"amount": 45}, policy_id="refund-policy") as ctx:
+        with VaultContext(client, "refund_tool", {"amount": 45}, policy_id="refund-policy"):
             pass
 
         import json

@@ -17,11 +17,11 @@ import argparse
 import logging
 import os
 
+import tools
+
 # In this repo the SDK module is `bylaw_python`; the published package
 # (`bylaw-python`) imports as `bylaw_python`. Either alias works the same.
 import bylaw_python as bylaw
-
-import tools
 
 CUSTOMER = "cust_friedmann"
 SESSION = "sess-friedmann-1"

@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
-import os
 import shutil
 import subprocess
 import sys
 import textwrap
 import time
 from pathlib import Path
+from typing import Any
 
 import click
 
@@ -145,8 +146,8 @@ def _compose_base() -> list[str]:
 
 def _poll_health(url: str, timeout: int = 90) -> bool:
     """Poll a health endpoint until it returns 200 or timeout."""
-    import urllib.request
     import urllib.error
+    import urllib.request
 
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -163,9 +164,8 @@ def _poll_health(url: str, timeout: int = 90) -> bool:
 
 @click.group()
 @click.version_option(package_name="bylaw-python")
-def main():
+def main() -> None:
     """Bylaw CLI — local development tools for the ALCV platform."""
-    pass
 
 
 @main.command()
@@ -173,7 +173,7 @@ def main():
 @click.option("--api-key", default=DEV_API_KEY, help="Dev API key")
 @click.option("--tenant-id", default=DEV_TENANT, help="Dev tenant ID")
 @click.option("--skip-health-check", is_flag=True, help="Don't wait for services to become healthy")
-def init(vault_port: int, api_key: str, tenant_id: str, skip_health_check: bool):
+def init(vault_port: int, api_key: str, tenant_id: str, skip_health_check: bool) -> None:
     """Scaffold and start a local Bylaw dev environment.
 
     Creates docker-compose, env, and manifest files, then starts all
@@ -281,7 +281,7 @@ def init(vault_port: int, api_key: str, tenant_id: str, skip_health_check: bool)
 
 
 @main.command()
-def status():
+def status() -> None:
     """Check whether the local Bylaw dev environment is running."""
     if not (Path.cwd() / COMPOSE_FILE).exists():
         click.echo(f"No {COMPOSE_FILE} found in current directory.")
@@ -295,7 +295,7 @@ def status():
         click.echo(result.stderr)
         return
 
-    containers: list[dict] = []
+    containers: list[dict[str, Any]] = []
     raw = result.stdout.strip()
     if raw:
         try:
@@ -308,10 +308,8 @@ def status():
             for line in raw.splitlines():
                 line = line.strip()
                 if line:
-                    try:
+                    with contextlib.suppress(json.JSONDecodeError):
                         containers.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        pass
 
     if not containers:
         click.echo("No containers running. Run 'bylaw init' to start.")
@@ -340,7 +338,7 @@ def status():
 @main.command()
 @click.option("--volumes", is_flag=True, help="Also remove data volumes")
 @click.confirmation_option(prompt="This will stop and remove all Bylaw dev containers. Continue?")
-def teardown(volumes: bool):
+def teardown(volumes: bool) -> None:
     """Stop and remove the local Bylaw dev environment."""
     compose_path = Path.cwd() / COMPOSE_FILE
     if not compose_path.exists():

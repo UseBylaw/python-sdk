@@ -12,7 +12,6 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlparse
 
-
 _PROVIDER_HOST_PREFIXES = ("www.", "api.", "api-")
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 import respx
 from httpx import Response
 
@@ -12,8 +13,6 @@ from bylaw_python import CheckActionRequest, RegisterFactRequest, VaultConfig
 from bylaw_python.evidence import _fact_request, _threshold_context, set_session_store
 from bylaw_python.manifest import EvidenceRule, load_manifest
 from bylaw_python.session_store import InMemorySessionStore
-
-import pytest
 
 
 def _config(mode: str = "observe") -> VaultConfig:

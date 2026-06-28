@@ -4,10 +4,8 @@
 
 from __future__ import annotations
 
-import json
 import sys
 from types import ModuleType
-from unittest.mock import MagicMock, patch
 
 import pytest
 import respx
@@ -15,7 +13,6 @@ from httpx import Response
 
 from bylaw_python import BylawClient
 from bylaw_python.exceptions import ClearanceDeniedError
-
 
 # ──────────────────────────────────────────────────────────────────────
 # LangChain adapter tests

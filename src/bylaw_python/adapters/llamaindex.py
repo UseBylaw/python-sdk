@@ -9,7 +9,7 @@ from ..client import BylawClient
 from ._core import build_clearance_request, resolve_client
 
 try:
-    from llama_index.core.tools import FunctionTool, ToolMetadata, ToolOutput
+    from llama_index.core.tools import FunctionTool
 except ImportError as exc:
     raise ImportError(
         "LlamaIndex adapter requires llama-index-core. "

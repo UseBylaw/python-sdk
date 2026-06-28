@@ -48,6 +48,8 @@ dev = [
     "pytest-cov>=4.0.0",
     "respx>=0.21.0",
     "build>=1.0.0",
+    "ruff==0.15.20",
+    "mypy==2.1.0",
 ]
 
 [project.urls]
@@ -68,3 +70,18 @@ source = ["bylaw_python"]
 [tool.coverage.report]
 show_missing = true
 fail_under = 80
+
+[tool.ruff]
+line-length = 100
+# Line length (E501) is left to a formatter pass (deferred).
+extend-exclude = [".lintvenv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "C4", "UP", "SIM", "PIE", "RET"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+ignore_missing_imports = true
+files = ["src/bylaw_python"]

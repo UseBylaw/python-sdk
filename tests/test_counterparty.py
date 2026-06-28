@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 
-from bylaw_python import ClearanceRequest, BylawClient, VaultConfig
+from bylaw_python import BylawClient, ClearanceRequest, VaultConfig
 from bylaw_python.counterparty import extract
 
 # Test-only dummy key — not a real credential.
