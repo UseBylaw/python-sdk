@@ -46,10 +46,10 @@ def _load_fixture(name: str) -> dict[str, Any]:
 def _wire_dict(model: Any) -> dict[str, Any]:
     """Serialize the way the SDK actually sends a request body.
 
-    ``BylawClient`` posts ``request.model_dump_json(...)``; we mirror that and
-    drop nulls so we compare only the keys that go on the wire.
+    ``BylawClient`` posts ``request.model_dump_json(...)``; we mirror that so
+    null-valued fields are included when they go on the wire.
     """
-    return json.loads(model.model_dump_json(exclude_none=True))
+    return json.loads(model.model_dump_json())
 
 
 # Keys the SDK emits at top level that the canonical Vault fixture does not yet
@@ -59,11 +59,18 @@ def _wire_dict(model: Any) -> dict[str, Any]:
 #
 #   request_clearance: SDK promotes ``purpose`` / ``data_categories`` to top
 #     level (Phase 2 GDPR Article 30 matching). The fixture currently nests the
-#     same information under ``context``.
+#     same information under ``context``. The SDK also emits unset optional
+#     top-level fields as JSON nulls.
 #   check_action: SDK emits ``obligations`` (list of required obligation codes);
 #     the fixture omits it.
 KNOWN_GAPS: dict[str, set[str]] = {
-    "request_clearance.json": {"purpose", "data_categories"},
+    "request_clearance.json": {
+        "purpose",
+        "data_categories",
+        "parent_jti",
+        "processing_register_ref",
+        "dataset_ref",
+    },
     "register_fact.json": set(),
     "check_action.json": {"obligations"},
     "check_output.json": set(),
