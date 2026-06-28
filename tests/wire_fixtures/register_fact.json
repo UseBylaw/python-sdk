@@ -1,0 +1,18 @@
+{
+  "customer_id": "cust_4421",
+  "session_id": "sess_9f3c1a2b",
+  "field": "risk_tolerance",
+  "value": "moderate",
+  "source_type": "document",
+  "source_id": "doc_kyc_2026_03",
+  "source_actor": "advisor@acme.example",
+  "scope": "profile",
+  "authority_level": "verified",
+  "observed_at": "2026-03-14T09:30:00Z",
+  "expires_at": "2027-03-14T09:30:00Z",
+  "can_update_profile": true,
+  "is_inferred": false,
+  "metadata": {
+    "page": 2
+  }
+}

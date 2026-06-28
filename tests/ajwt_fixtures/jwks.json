@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "x": "A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg",
+      "use": "sig",
+      "kid": "vault-test-key-001",
+      "alg": "EdDSA"
+    }
+  ]
+}

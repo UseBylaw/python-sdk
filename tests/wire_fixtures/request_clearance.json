@@ -1,0 +1,23 @@
+{
+  "client_id": "tenant_acme",
+  "tool_name": "stripe_refund",
+  "tool_args": {
+    "amount": 45
+  },
+  "agent_id": "agent-checkout-bot",
+  "session_id": "sess_9f3c1a2b",
+  "human_principal": "auth0|user_5512",
+  "destination_uri": "https://api.stripe.com/v1/refunds",
+  "destination_provider": "stripe",
+  "destination_account_ref": "acct_1QabcdEFGH",
+  "context": {
+    "policy_id": "refund_policy_v1",
+    "action_category": "payment.refund",
+    "action_metadata": {
+      "currency": "usd",
+      "charge_id": "ch_3Pxyz"
+    },
+    "purpose": "customer_service_refund",
+    "data_categories": ["financial"]
+  }
+}
