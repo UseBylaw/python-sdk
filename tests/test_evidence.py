@@ -306,7 +306,9 @@ def test_obligations_carried_into_session_store():
     from bylaw_python.evidence import _get_store
     assert "do_not_update_profile" in _get_store().obligations("sess_1", "cust_42")
     body = json.loads(check.calls.last.request.content)
-    assert body["obligations"] == ["do_not_update_profile"]
+    # obligations is response-only: it is recorded into the session store (above)
+    # but is NOT emitted on the outbound check-action wire (Vault has no field).
+    assert "obligations" not in body
 
 
 @respx.mock

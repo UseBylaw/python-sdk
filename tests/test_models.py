@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -49,8 +51,11 @@ class TestClearanceRequest:
         assert restored == req
 
     def test_phase_2_processing_register_fields(self):
-        """Phase 2 (0.3.1): data_categories / purpose / processing_register_ref
-        survive a JSON round-trip and default to None when omitted."""
+        """data_categories / purpose are wired NESTED under ``context`` (where
+        Vault's typed RequestContext reads them) and round-trip as attributes via
+        the mode='before' lift. ``processing_register_ref`` is a LOCAL-ONLY
+        attribute — Vault's clearance wire has no field for it anywhere — so it is
+        never emitted and does not round-trip across the wire."""
         req = ClearanceRequest(
             tool_name="customer_export",
             data_categories=["customer_email", "transaction_amount"],
@@ -61,10 +66,25 @@ class TestClearanceRequest:
         assert req.purpose == "billing"
         assert req.processing_register_ref == "00000000-0000-0000-0000-000000000001"
 
+        wire = json.loads(req.model_dump_json())
+        # data_categories / purpose are folded under context, NOT at top level.
+        assert "data_categories" not in wire
+        assert "purpose" not in wire
+        assert wire["context"]["data_categories"] == ["customer_email", "transaction_amount"]
+        assert wire["context"]["purpose"] == "billing"
+        # processing_register_ref is local-only: never on the wire (top level
+        # or nested).
+        assert "processing_register_ref" not in wire
+        assert "processing_register_ref" not in wire["context"]
+
         restored = ClearanceRequest.model_validate_json(req.model_dump_json())
+        # The wired fields lift back out of context onto the attrs.
         assert restored.data_categories == req.data_categories
         assert restored.purpose == req.purpose
-        assert restored.processing_register_ref == req.processing_register_ref
+        # processing_register_ref is dropped on the wire, so it does NOT
+        # round-trip; it is None after a wire round-trip even though it was set
+        # on the original model.
+        assert restored.processing_register_ref is None
 
         # Defaults are None when omitted.
         bare = ClearanceRequest(tool_name="x")
@@ -73,18 +93,51 @@ class TestClearanceRequest:
         assert bare.processing_register_ref is None
 
     def test_phase_6_dataset_ref_field(self):
-        """Phase 6 (0.3.1): dataset_ref survives a JSON round-trip."""
+        """dataset_ref is wired NESTED under ``context`` and round-trips as an
+        attribute via the mode='before' lift."""
         req = ClearanceRequest(
             tool_name="kb_search",
             dataset_ref="prod_customer_support_kb",
         )
         assert req.dataset_ref == "prod_customer_support_kb"
 
+        wire = json.loads(req.model_dump_json())
+        assert "dataset_ref" not in wire
+        assert wire["context"]["dataset_ref"] == "prod_customer_support_kb"
+
         restored = ClearanceRequest.model_validate_json(req.model_dump_json())
         assert restored.dataset_ref == req.dataset_ref
 
         bare = ClearanceRequest(tool_name="x")
         assert bare.dataset_ref is None
+
+    def test_context_embedded_gdpr_lifts_and_round_trips(self):
+        """A GDPR value supplied directly inside ``context`` (no top-level kwarg)
+        is lifted onto the attr and re-emitted under ``context``."""
+        req = ClearanceRequest(
+            tool_name="kb_search",
+            context={"policy_id": "p1", "purpose": "billing"},
+        )
+        assert req.purpose == "billing"
+        wire = json.loads(req.model_dump_json())
+        assert "purpose" not in wire
+        assert wire["context"]["purpose"] == "billing"
+        assert wire["context"]["policy_id"] == "p1"
+
+    def test_explicit_none_suppresses_context_embedded_value(self):
+        """An explicit ``purpose=None`` is honored (not overwritten by a context
+        value) AND strips any same-named key from the serialized ``context`` —
+        so it never leaks onto the wire. Other context keys are untouched."""
+        req = ClearanceRequest(
+            tool_name="kb_search",
+            purpose=None,
+            context={"policy_id": "p1", "purpose": "should_be_suppressed"},
+        )
+        assert req.purpose is None
+        wire = json.loads(req.model_dump_json())
+        assert "purpose" not in wire
+        assert "purpose" not in wire["context"]
+        assert wire["context"]["policy_id"] == "p1"
 
 
 class TestClearanceResponse:

@@ -7,6 +7,7 @@
   "agent_id": "agent-checkout-bot",
   "session_id": "sess_9f3c1a2b",
   "human_principal": "auth0|user_5512",
+  "parent_jti": "ajwt_parent_7f21",
   "destination_uri": "https://api.stripe.com/v1/refunds",
   "destination_provider": "stripe",
   "destination_account_ref": "acct_1QabcdEFGH",

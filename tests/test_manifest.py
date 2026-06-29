@@ -123,6 +123,45 @@ class TestAutoInstrument:
         assert body["tool_name"] == "stripe_charge"
 
     @respx.mock
+    def test_manifest_context_gdpr_fields_reach_wire(
+        self,
+        vault_config,
+        approved_response: dict,
+    ):
+        route = respx.post("https://vault.test/request-clearance").mock(
+            return_value=Response(200, json=approved_response)
+        )
+        bylaw.configure(vault_config)
+        tools_module = _make_module(
+            "test_gdpr_tools_module",
+            "import bylaw_python as bylaw\n"
+            "def customer_export():\n"
+            "    return bylaw.current_token()\n",
+        )
+
+        bylaw.auto_instrument(
+            tools_module,
+            manifest={
+                "enforce": [
+                    {
+                        "tool": "customer_export",
+                        "context": {
+                            "purpose": "billing",
+                            "data_categories": ["customer_email"],
+                            "dataset_ref": "prod_customer_support_kb",
+                        },
+                    }
+                ]
+            },
+        )
+
+        assert tools_module.customer_export() == approved_response["token"]
+        body = json.loads(route.calls[0].request.content)
+        assert body["context"]["purpose"] == "billing"
+        assert body["context"]["data_categories"] == ["customer_email"]
+        assert body["context"]["dataset_ref"] == "prod_customer_support_kb"
+
+    @respx.mock
     def test_recurse_instruments_submodules(
         self,
         monkeypatch: pytest.MonkeyPatch,

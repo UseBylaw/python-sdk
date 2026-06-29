@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from types import ModuleType
 
@@ -13,6 +14,27 @@ from httpx import Response
 
 from bylaw_python import BylawClient
 from bylaw_python.exceptions import ClearanceDeniedError
+
+
+def test_build_clearance_request_preserves_extra_context_gdpr(client: BylawClient):
+    from bylaw_python.adapters._core import build_clearance_request
+
+    request = build_clearance_request(
+        tool_name="customer_export",
+        tool_args={},
+        client=client,
+        extra_context={
+            "purpose": "billing",
+            "data_categories": ["customer_email"],
+            "dataset_ref": "prod_customer_support_kb",
+        },
+    )
+
+    body = json.loads(request.model_dump_json())
+    assert body["context"]["purpose"] == "billing"
+    assert body["context"]["data_categories"] == ["customer_email"]
+    assert body["context"]["dataset_ref"] == "prod_customer_support_kb"
+
 
 # ──────────────────────────────────────────────────────────────────────
 # LangChain adapter tests

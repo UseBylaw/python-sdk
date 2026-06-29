@@ -48,6 +48,25 @@ _current_clearance: contextvars.ContextVar[ClearanceResponse | None] = contextva
 _manifest: Manifest | None = None
 
 
+def _request_gdpr_kwargs(
+    *,
+    data_categories: list[str] | None,
+    purpose: str | None,
+    processing_register_ref: str | None,
+    dataset_ref: str | None,
+) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in {
+            "data_categories": data_categories,
+            "purpose": purpose,
+            "processing_register_ref": processing_register_ref,
+            "dataset_ref": dataset_ref,
+        }.items()
+        if value is not None
+    }
+
+
 def configure(config: VaultConfig | None = None, **kwargs: Any) -> BylawClient:
     """Configure the global Bylaw client.
 
@@ -342,10 +361,12 @@ def enforce(
                 agent_id=client.config.agent_id,
                 session_id=_active_session(client)[0],
                 context={**(context or {}), **({"policy_id": policy_id} if policy_id else {})},
-                data_categories=data_categories,
-                purpose=purpose,
-                processing_register_ref=processing_register_ref,
-                dataset_ref=dataset_ref,
+                **_request_gdpr_kwargs(
+                    data_categories=data_categories,
+                    purpose=purpose,
+                    processing_register_ref=processing_register_ref,
+                    dataset_ref=dataset_ref,
+                ),
             )
 
         if inspect.iscoroutinefunction(func):
@@ -525,10 +546,12 @@ class VaultContext:
             agent_id=self.client.config.agent_id,
             session_id=self.client.config.session_id,
             context=ctx,
-            data_categories=self.data_categories,
-            purpose=self.purpose,
-            processing_register_ref=self.processing_register_ref,
-            dataset_ref=self.dataset_ref,
+            **_request_gdpr_kwargs(
+                data_categories=self.data_categories,
+                purpose=self.purpose,
+                processing_register_ref=self.processing_register_ref,
+                dataset_ref=self.dataset_ref,
+            ),
         )
 
     # Sync context manager
@@ -597,10 +620,12 @@ def vault_enforce(
                     agent_id=client.config.agent_id,
                     session_id=client.config.session_id,
                     context={**(context or {}), **({"policy_id": policy_id} if policy_id else {})},
-                    data_categories=data_categories,
-                    purpose=purpose,
-                    processing_register_ref=processing_register_ref,
-                    dataset_ref=dataset_ref,
+                    **_request_gdpr_kwargs(
+                        data_categories=data_categories,
+                        purpose=purpose,
+                        processing_register_ref=processing_register_ref,
+                        dataset_ref=dataset_ref,
+                    ),
                 )
                 clearance = await client.arequest_clearance(request)
                 kwargs["_clearance"] = clearance
@@ -617,10 +642,12 @@ def vault_enforce(
                 agent_id=client.config.agent_id,
                 session_id=client.config.session_id,
                 context={**(context or {}), **({"policy_id": policy_id} if policy_id else {})},
-                data_categories=data_categories,
-                purpose=purpose,
-                processing_register_ref=processing_register_ref,
-                dataset_ref=dataset_ref,
+                **_request_gdpr_kwargs(
+                    data_categories=data_categories,
+                    purpose=purpose,
+                    processing_register_ref=processing_register_ref,
+                    dataset_ref=dataset_ref,
+                ),
             )
             clearance = client.request_clearance(request)
             kwargs["_clearance"] = clearance

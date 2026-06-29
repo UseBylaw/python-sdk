@@ -45,14 +45,21 @@ def build_clearance_request(
     ctx: dict[str, Any] = dict(extra_context or {})
     if policy_id:
         ctx["policy_id"] = policy_id
+    gdpr_kwargs: dict[str, Any] = {
+        key: value
+        for key, value in {
+            "data_categories": data_categories,
+            "purpose": purpose,
+            "processing_register_ref": processing_register_ref,
+            "dataset_ref": dataset_ref,
+        }.items()
+        if value is not None
+    }
     return ClearanceRequest(
         tool_name=tool_name,
         tool_args=tool_args,
         agent_id=client.config.agent_id,
         session_id=client.config.session_id,
         context=ctx,
-        data_categories=data_categories,
-        purpose=purpose,
-        processing_register_ref=processing_register_ref,
-        dataset_ref=dataset_ref,
+        **gdpr_kwargs,
     )
