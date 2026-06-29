@@ -154,6 +154,55 @@ class TestClearanceRequest:
         assert "purpose" not in wire["context"]
         assert wire["context"]["policy_id"] == "p1"
 
+    def test_explicit_none_suppresses_nested_gdpr_fields(self):
+        req = ClearanceRequest(
+            tool_name="customer_export",
+            context={
+                "purpose": "billing",
+                "data_categories": ["customer_email"],
+                "dataset_ref": "prod_customer_support_kb",
+            },
+            purpose=None,
+            data_categories=None,
+            dataset_ref=None,
+        )
+
+        assert req.purpose is None
+        assert req.data_categories is None
+        assert req.dataset_ref is None
+        assert "purpose" not in req.model_dump()["context"]
+        assert "data_categories" not in req.model_dump()["context"]
+        assert "dataset_ref" not in req.model_dump()["context"]
+
+    def test_cleared_gdpr_attrs_remove_stale_context_values(self):
+        req = ClearanceRequest(
+            tool_name="customer_export",
+            purpose="billing",
+            data_categories=["customer_email"],
+            dataset_ref="prod_customer_support_kb",
+        )
+        restored = ClearanceRequest.model_validate_json(req.model_dump_json())
+
+        cleared = restored.model_copy(
+            update={
+                "purpose": None,
+                "data_categories": None,
+                "dataset_ref": None,
+            }
+        )
+        wire = json.loads(cleared.model_dump_json())
+        assert "purpose" not in wire["context"]
+        assert "data_categories" not in wire["context"]
+        assert "dataset_ref" not in wire["context"]
+
+        cleared.context["purpose"] = "billing"
+        cleared.context["data_categories"] = ["customer_email"]
+        cleared.context["dataset_ref"] = "prod_customer_support_kb"
+        wire = json.loads(cleared.model_dump_json())
+        assert "purpose" not in wire["context"]
+        assert "data_categories" not in wire["context"]
+        assert "dataset_ref" not in wire["context"]
+
 
 class TestClearanceResponse:
     def test_approved(self):
