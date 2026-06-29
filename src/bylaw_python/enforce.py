@@ -46,14 +46,15 @@ _current_clearance: contextvars.ContextVar[ClearanceResponse | None] = contextva
     "_bylaw_clearance", default=None
 )
 _manifest: Manifest | None = None
+_UNSET: Any = object()
 
 
 def _request_gdpr_kwargs(
     *,
-    data_categories: list[str] | None,
-    purpose: str | None,
-    processing_register_ref: str | None,
-    dataset_ref: str | None,
+    data_categories: Any,
+    purpose: Any,
+    processing_register_ref: Any,
+    dataset_ref: Any,
 ) -> dict[str, Any]:
     return {
         key: value
@@ -63,7 +64,7 @@ def _request_gdpr_kwargs(
             "processing_register_ref": processing_register_ref,
             "dataset_ref": dataset_ref,
         }.items()
-        if value is not None
+        if value is not _UNSET
     }
 
 
@@ -230,11 +231,11 @@ def tool(
     policy_id: str | None = None,
     context: dict[str, Any] | None = None,
     # Phase 2 — GDPR Article 30 processing-register matching.
-    data_categories: list[str] | None = None,
-    purpose: str | None = None,
-    processing_register_ref: str | None = None,
+    data_categories: list[str] | None = _UNSET,
+    purpose: str | None = _UNSET,
+    processing_register_ref: str | None = _UNSET,
     # Phase 6 — dataset lineage.
-    dataset_ref: str | None = None,
+    dataset_ref: str | None = _UNSET,
 ) -> F | Callable[[F], F]:
     """Decorator to enforce Vault clearance on a single function.
 
@@ -312,11 +313,11 @@ def enforce(
     on_review_pending: Callable[[PendingApproval], None] | None = None,
     evidence: EvidenceRule | None = None,
     # Phase 2 — GDPR Article 30 processing-register matching.
-    data_categories: list[str] | None = None,
-    purpose: str | None = None,
-    processing_register_ref: str | None = None,
+    data_categories: list[str] | None = _UNSET,
+    purpose: str | None = _UNSET,
+    processing_register_ref: str | None = _UNSET,
     # Phase 6 — dataset lineage.
-    dataset_ref: str | None = None,
+    dataset_ref: str | None = _UNSET,
 ) -> Callable[[F], F]:
     """Decorator that enforces Vault clearance before a function executes.
 
@@ -520,10 +521,10 @@ class VaultContext:
         *,
         context: dict[str, Any] | None = None,
         policy_id: str | None = None,
-        data_categories: list[str] | None = None,
-        purpose: str | None = None,
-        processing_register_ref: str | None = None,
-        dataset_ref: str | None = None,
+        data_categories: list[str] | None = _UNSET,
+        purpose: str | None = _UNSET,
+        processing_register_ref: str | None = _UNSET,
+        dataset_ref: str | None = _UNSET,
     ) -> None:
         self.client = client
         self.tool_name = tool_name
@@ -579,10 +580,10 @@ def vault_enforce(
     tool_name: str | None = None,
     policy_id: str | None = None,
     context: dict[str, Any] | None = None,
-    data_categories: list[str] | None = None,
-    purpose: str | None = None,
-    processing_register_ref: str | None = None,
-    dataset_ref: str | None = None,
+    data_categories: list[str] | None = _UNSET,
+    purpose: str | None = _UNSET,
+    processing_register_ref: str | None = _UNSET,
+    dataset_ref: str | None = _UNSET,
 ) -> Callable[[F], F]:
     """Decorator that enforces Vault clearance before a function executes.
 

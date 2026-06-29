@@ -7,6 +7,7 @@ import pytest
 import respx
 from httpx import Response
 
+import bylaw_python as bylaw
 from bylaw_python import BylawClient
 from bylaw_python.enforce import VaultContext, vault_enforce
 from bylaw_python.exceptions import ClearanceDeniedError
@@ -108,6 +109,81 @@ class TestVaultEnforceSync:
         body = json.loads(route.calls[0].request.content)
         assert body["context"]["policy_id"] == "refund-policy"
 
+    @respx.mock
+    def test_explicit_none_gdpr_overrides_context(
+        self,
+        client: BylawClient,
+        approved_response: dict,
+    ):
+        route = respx.post("https://vault.test/request-clearance").mock(
+            return_value=Response(200, json=approved_response)
+        )
+
+        @vault_enforce(
+            client,
+            tool_name="customer_export",
+            context={
+                "purpose": "billing",
+                "data_categories": ["customer_email"],
+                "dataset_ref": "prod_customer_support_kb",
+            },
+            purpose=None,
+            data_categories=None,
+            dataset_ref=None,
+        )
+        def customer_export(**kwargs):
+            return "done"
+
+        customer_export()
+
+        import json
+        body = json.loads(route.calls[0].request.content)
+        assert "purpose" not in body["context"]
+        assert "data_categories" not in body["context"]
+        assert "dataset_ref" not in body["context"]
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Low-code decorator tests
+# ──────────────────────────────────────────────────────────────────────
+
+
+class TestEnforce:
+    """Tests for @enforce with the configured default client."""
+
+    @respx.mock
+    def test_explicit_none_gdpr_overrides_context(
+        self,
+        vault_config,
+        approved_response: dict,
+    ):
+        route = respx.post("https://vault.test/request-clearance").mock(
+            return_value=Response(200, json=approved_response)
+        )
+        bylaw.configure(vault_config)
+
+        @bylaw.enforce(
+            tool_name="customer_export",
+            context={
+                "purpose": "billing",
+                "data_categories": ["customer_email"],
+                "dataset_ref": "prod_customer_support_kb",
+            },
+            purpose=None,
+            data_categories=None,
+            dataset_ref=None,
+        )
+        def customer_export():
+            return bylaw.current_token()
+
+        assert customer_export() == approved_response["token"]
+
+        import json
+        body = json.loads(route.calls[0].request.content)
+        assert "purpose" not in body["context"]
+        assert "data_categories" not in body["context"]
+        assert "dataset_ref" not in body["context"]
+
 
 # ──────────────────────────────────────────────────────────────────────
 # Decorator tests — async
@@ -208,3 +284,34 @@ class TestVaultContext:
         import json
         body = json.loads(route.calls[0].request.content)
         assert body["context"]["policy_id"] == "refund-policy"
+
+    @respx.mock
+    def test_explicit_none_gdpr_overrides_context(
+        self,
+        client: BylawClient,
+        approved_response: dict,
+    ):
+        route = respx.post("https://vault.test/request-clearance").mock(
+            return_value=Response(200, json=approved_response)
+        )
+
+        with VaultContext(
+            client,
+            "customer_export",
+            {},
+            context={
+                "purpose": "billing",
+                "data_categories": ["customer_email"],
+                "dataset_ref": "prod_customer_support_kb",
+            },
+            purpose=None,
+            data_categories=None,
+            dataset_ref=None,
+        ):
+            pass
+
+        import json
+        body = json.loads(route.calls[0].request.content)
+        assert "purpose" not in body["context"]
+        assert "data_categories" not in body["context"]
+        assert "dataset_ref" not in body["context"]

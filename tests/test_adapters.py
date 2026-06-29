@@ -36,6 +36,31 @@ def test_build_clearance_request_preserves_extra_context_gdpr(client: BylawClien
     assert body["context"]["dataset_ref"] == "prod_customer_support_kb"
 
 
+def test_build_clearance_request_explicit_none_suppresses_extra_context_gdpr(
+    client: BylawClient,
+):
+    from bylaw_python.adapters._core import build_clearance_request
+
+    request = build_clearance_request(
+        tool_name="customer_export",
+        tool_args={},
+        client=client,
+        extra_context={
+            "purpose": "billing",
+            "data_categories": ["customer_email"],
+            "dataset_ref": "prod_customer_support_kb",
+        },
+        purpose=None,
+        data_categories=None,
+        dataset_ref=None,
+    )
+
+    body = json.loads(request.model_dump_json())
+    assert "purpose" not in body["context"]
+    assert "data_categories" not in body["context"]
+    assert "dataset_ref" not in body["context"]
+
+
 # ──────────────────────────────────────────────────────────────────────
 # LangChain adapter tests
 # ──────────────────────────────────────────────────────────────────────
