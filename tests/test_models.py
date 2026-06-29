@@ -92,6 +92,21 @@ class TestClearanceRequest:
         assert bare.purpose is None
         assert bare.processing_register_ref is None
 
+    def test_context_embedded_processing_register_ref_is_not_emitted(self):
+        req = ClearanceRequest(
+            tool_name="customer_export",
+            context={
+                "policy_id": "p1",
+                "processing_register_ref": "00000000-0000-0000-0000-000000000001",
+            },
+        )
+        assert req.processing_register_ref is None
+
+        wire = json.loads(req.model_dump_json())
+        assert "processing_register_ref" not in wire
+        assert "processing_register_ref" not in wire["context"]
+        assert wire["context"]["policy_id"] == "p1"
+
     def test_phase_6_dataset_ref_field(self):
         """dataset_ref is wired NESTED under ``context`` and round-trips as an
         attribute via the mode='before' lift."""

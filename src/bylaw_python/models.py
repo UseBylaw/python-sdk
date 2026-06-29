@@ -130,6 +130,7 @@ class ClearanceRequest(BaseModel):
         """
         data = cast("dict[str, Any]", handler(self))
         context = dict(data.get("context") or {})
+        context.pop("processing_register_ref", None)
         if self.data_categories is not None:
             context["data_categories"] = self.data_categories
         else:
