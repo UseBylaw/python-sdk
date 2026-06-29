@@ -53,26 +53,22 @@ def _wire_dict(model: Any) -> dict[str, Any]:
 
 
 # Keys the SDK emits at top level that the canonical Vault fixture does not yet
-# list. These are reconciliation TODOs on the Vault fixtures, documented in the
-# test report. They are NOT silently ignored: the tests assert the gap set is
-# exactly this, so any new drift fails.
+# list. These are reconciliation TODOs on the Vault fixtures. They are NOT
+# silently ignored: the tests assert the gap set is exactly this, so any new
+# drift fails.
 #
-#   request_clearance: SDK promotes ``purpose`` / ``data_categories`` to top
-#     level (Phase 2 GDPR Article 30 matching). The fixture currently nests the
-#     same information under ``context``. The SDK also emits unset optional
-#     top-level fields as JSON nulls.
-#   check_action: SDK emits ``obligations`` (list of required obligation codes);
-#     the fixture omits it.
+# As of the wire-behavior fix, the SDK no longer diverges from the Vault wire:
+#   request_clearance: ``purpose`` / ``data_categories`` / ``dataset_ref`` are
+#     now folded under ``context`` (where Vault's typed ``RequestContext`` reads
+#     them), matching the fixture. ``processing_register_ref`` is no longer
+#     emitted at all (Vault's clearance wire has no field for it). ``parent_jti``
+#     is a real top-level field Vault accepts and is now present in the fixture.
+#   check_action: ``obligations`` is response-only and is no longer emitted on
+#     the outbound wire, so the fixture's omission is correct.
 KNOWN_GAPS: dict[str, set[str]] = {
-    "request_clearance.json": {
-        "purpose",
-        "data_categories",
-        "parent_jti",
-        "processing_register_ref",
-        "dataset_ref",
-    },
+    "request_clearance.json": set(),
     "register_fact.json": set(),
-    "check_action.json": {"obligations"},
+    "check_action.json": set(),
     "check_output.json": set(),
 }
 

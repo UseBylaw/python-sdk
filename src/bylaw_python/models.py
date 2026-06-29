@@ -3,9 +3,18 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 _MISSING = object()
 
@@ -49,16 +58,29 @@ class ClearanceRequest(BaseModel):
     # processing register that covers (data_categories ⊇ requested,
     # purpose ∈ register.purposes, recipient ∈ register.recipients). Unmatched
     # requests are denied with reason_code='processing_no_register_match'.
+    #
+    # WIRE NOTE: Vault decodes the clearance body into a typed Go struct whose
+    # GDPR fields live nested under ``context`` (RequestContext): keys
+    # ``purpose``, ``data_categories``, ``dataset_ref``. These attributes are
+    # therefore ``exclude=True`` (kept on the public API) and folded into the
+    # serialized ``context`` object by ``_serialize_with_nested_gdpr`` below.
+    # ``processing_register_ref`` has NO field anywhere on Vault's clearance
+    # wire (typed struct lacks it), so it is a LOCAL-ONLY attribute and is never
+    # emitted. A ``mode='before'`` validator lifts the three wired fields back
+    # out of an incoming ``context`` so attribute round-trips still hold.
     data_categories: list[str] | None = Field(
         default=None,
+        exclude=True,
         description="Personal-data categories this action will touch (e.g. ['customer_email','transaction_amount'])",
     )
     purpose: str | None = Field(
         default=None,
+        exclude=True,
         description="Purpose of processing (e.g. 'fraud_detection', 'billing'); must be in matched register's purposes",
     )
     processing_register_ref: str | None = Field(
         default=None,
+        exclude=True,
         description="Optional UUID hint of which register this action anchors to; Vault still does authoritative match",
     )
     # Phase 6 — dataset lineage. When supplied, dataset sheets auto-derive
@@ -66,8 +88,62 @@ class ClearanceRequest(BaseModel):
     # ledger replay scoped to events with this ref.
     dataset_ref: str | None = Field(
         default=None,
+        exclude=True,
         description="Logical dataset reference this action reads/writes (e.g. 'prod_customer_support_kb', S3 path, table name)",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _lift_gdpr_fields_from_context(cls, value: Any) -> Any:
+        """Lift wired GDPR fields out of an incoming ``context`` onto the model.
+
+        Serialization nests ``purpose`` / ``data_categories`` / ``dataset_ref``
+        under ``context`` (where Vault's typed ``RequestContext`` reads them), so
+        ``model_validate_json(model_dump_json())`` must reverse that to keep the
+        attribute round-trip intact. An explicit top-level kwarg always wins —
+        we only lift when the top-level key is absent (an explicit
+        ``purpose=None`` is honored as a deliberate suppression, not overwritten).
+        """
+        if not isinstance(value, dict):
+            return value
+        context = value.get("context")
+        if not isinstance(context, dict):
+            return value
+        data = dict(value)
+        for key in ("purpose", "data_categories", "dataset_ref"):
+            if key in context and key not in data:
+                data[key] = context[key]
+        return data
+
+    @model_serializer(mode="wrap")
+    def _serialize_with_nested_gdpr(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        """Fold the wired GDPR fields into a copy of ``context`` at dump time.
+
+        ``data_categories`` / ``purpose`` / ``dataset_ref`` are ``exclude=True``
+        so the base handler omits them at top level; we merge them (when set)
+        into the serialized ``context`` dict so they reach Vault's typed
+        ``RequestContext``. ``processing_register_ref`` is never emitted —
+        Vault's clearance wire has no field for it anywhere. When an attr is
+        ``None`` we also strip any same-named key already in ``context`` so an
+        explicit ``None`` suppresses a context-embedded value instead of leaking
+        it onto the wire.
+        """
+        data = cast("dict[str, Any]", handler(self))
+        context = dict(data.get("context") or {})
+        if self.data_categories is not None:
+            context["data_categories"] = self.data_categories
+        else:
+            context.pop("data_categories", None)
+        if self.purpose is not None:
+            context["purpose"] = self.purpose
+        else:
+            context.pop("purpose", None)
+        if self.dataset_ref is not None:
+            context["dataset_ref"] = self.dataset_ref
+        else:
+            context.pop("dataset_ref", None)
+        data["context"] = context
+        return data
 
 
 ConfidenceBucket = Literal["extra_high", "high", "medium", "low", "none"]
@@ -398,7 +474,11 @@ class CheckActionRequest(BaseModel):
     action_type: str
     workflow: str = ""
     facts: list[FactRef] = Field(default_factory=list)
-    obligations: list[str] = Field(default_factory=list)
+    # WIRE NOTE: ``obligations`` is a RESPONSE-only concept — Vault has no
+    # request field for it (it would be silently dropped). It is kept as an
+    # attribute (so ``evidence.py`` can set it and the public API is unchanged)
+    # but ``exclude=True`` so it never goes out on the check-action wire.
+    obligations: list[str] = Field(default_factory=list, exclude=True)
     current_turn: int = 0
     context: dict[str, Any] = Field(default_factory=dict)
 
