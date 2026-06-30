@@ -497,8 +497,12 @@ class CheckActionRequest(BaseModel):
     obligations: list[str] = Field(default_factory=list, exclude=True)
     current_turn: int = 0
     context: dict[str, Any] = Field(default_factory=dict)
-    # LOCAL-ONLY until the Vault wire contract accepts this field.
-    evidence_chunks: list[EvidenceChunk] = Field(default_factory=list, exclude=True)
+    # Transient candidate text for the opt-in semantic-grounding / relevance
+    # checks. It IS sent to Vault (whose check-action/check-output wire accepts
+    # evidence_chunks; an older Vault simply ignores the unknown field) but is
+    # never stored — Vault keeps only a calibrated verdict + a fact pointer.
+    # Empty by default (omitted on the wire) ⇒ no text leaves your process.
+    evidence_chunks: list[EvidenceChunk] = Field(default_factory=list)
 
 
 class OutputClaim(BaseModel):
@@ -532,8 +536,12 @@ class CheckOutputRequest(BaseModel):
     facts: list[FactRef] = Field(default_factory=list)
     output_claims: list[OutputClaim] = Field(default_factory=list)
     current_turn: int = 0
-    # LOCAL-ONLY until the Vault wire contract accepts this field.
-    evidence_chunks: list[EvidenceChunk] = Field(default_factory=list, exclude=True)
+    # Transient candidate text for the opt-in semantic-grounding / relevance
+    # checks. It IS sent to Vault (whose check-action/check-output wire accepts
+    # evidence_chunks; an older Vault simply ignores the unknown field) but is
+    # never stored — Vault keeps only a calibrated verdict + a fact pointer.
+    # Empty by default (omitted on the wire) ⇒ no text leaves your process.
+    evidence_chunks: list[EvidenceChunk] = Field(default_factory=list)
 
 
 class ChallengeSource(BaseModel):
