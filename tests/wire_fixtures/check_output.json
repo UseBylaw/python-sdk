@@ -10,6 +10,15 @@
       "fact_id": "fact_abc123"
     }
   ],
+  "evidence_chunks": [
+    {
+      "fact_id": "fact_abc123",
+      "source_type": "document",
+      "source_id": "doc_kyc_2026_03",
+      "field": "risk_tolerance",
+      "text": "Risk tolerance: moderate. Recommended allocation guidance: balanced."
+    }
+  ],
   "output_claims": [
     {
       "claim_text": "Your risk tolerance is moderate.",
