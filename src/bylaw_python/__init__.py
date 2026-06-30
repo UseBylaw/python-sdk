@@ -1,5 +1,5 @@
 # Bylaw ALCV — Python SDK
-# Agent-agnostic compliance shim for SOX 404 policy enforcement
+# Runtime enforcement SDK for AI agent actions
 #
 # Recommended usage:
 #   import bylaw_python as bylaw
@@ -21,7 +21,7 @@
 #       token = kwargs.get("_clearance").token
 #       ...
 
-"""Bylaw ALCV — agent-agnostic compliance shim for SOX 404 enforcement."""
+"""Bylaw ALCV runtime enforcement SDK for AI agent actions."""
 
 from .client import BylawClient
 from .config import VaultConfig
@@ -85,7 +85,7 @@ from .pending import PendingApproval
 from .session_store import InMemorySessionStore, SessionEvidenceStore
 from .webhook import verify_webhook
 
-__version__ = "0.6.6"
+__version__ = "0.6.7"
 
 __all__ = [
     # Core

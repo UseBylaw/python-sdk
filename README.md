@@ -1,10 +1,10 @@
 # Bylaw ALCV — Python SDK
 
-[![PyPI](https://img.shields.io/badge/pypi-v0.6.3-blue)](https://pypi.org/project/bylaw-python/)
+[![PyPI](https://img.shields.io/badge/pypi-v0.6.7-blue)](https://pypi.org/project/bylaw-python/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-Agent-agnostic compliance shim for SOX 404 policy enforcement. Intercepts AI agent tool calls, validates them against your policies via the ALCV Vault, and ensures only approved actions receive a cryptographically signed A-JWT (Agentic JSON Web Token).
+Runtime enforcement SDK for AI agent actions. It intercepts proposed tool/API calls, requests policy clearance from the ALCV Vault, blocks or escalates unapproved actions, and passes only approved actions forward with a short-lived signed A-JWT and audit evidence.
 
 ## Quick Start
 
