@@ -465,6 +465,22 @@ class EvidenceConflict(BaseModel):
     fact_id_b: str = ""
 
 
+class EvidenceChunk(BaseModel):
+    """TRANSIENT candidate evidence text for the optional semantic-grounding /
+    relevance checks. It is sent only for this one call and is never stored:
+    Vault keeps only the calibrated verdict + a pointer back to the fact, never
+    the text. Leave empty (the default) and no text ever leaves your process.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    text: str = ""
+    fact_id: str = ""
+    source_type: str = ""
+    source_id: str = ""
+    field: str = ""
+
+
 class CheckActionRequest(BaseModel):
     """Request to evaluate a protected action against current evidence."""
 
@@ -481,6 +497,8 @@ class CheckActionRequest(BaseModel):
     obligations: list[str] = Field(default_factory=list, exclude=True)
     current_turn: int = 0
     context: dict[str, Any] = Field(default_factory=dict)
+    # Transient candidate text for the opt-in topical-relevance check; never stored.
+    evidence_chunks: list[EvidenceChunk] = Field(default_factory=list)
 
 
 class OutputClaim(BaseModel):
@@ -514,6 +532,9 @@ class CheckOutputRequest(BaseModel):
     facts: list[FactRef] = Field(default_factory=list)
     output_claims: list[OutputClaim] = Field(default_factory=list)
     current_turn: int = 0
+    # Transient candidate text for the opt-in qualitative output-grounding check;
+    # never stored. Leave empty and no text leaves your process.
+    evidence_chunks: list[EvidenceChunk] = Field(default_factory=list)
 
 
 class ChallengeSource(BaseModel):
