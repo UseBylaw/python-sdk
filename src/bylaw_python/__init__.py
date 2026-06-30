@@ -85,7 +85,7 @@ from .pending import PendingApproval
 from .session_store import InMemorySessionStore, SessionEvidenceStore
 from .webhook import verify_webhook
 
-__version__ = "0.6.5"
+__version__ = "0.6.6"
 
 __all__ = [
     # Core
