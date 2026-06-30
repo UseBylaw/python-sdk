@@ -497,8 +497,8 @@ class CheckActionRequest(BaseModel):
     obligations: list[str] = Field(default_factory=list, exclude=True)
     current_turn: int = 0
     context: dict[str, Any] = Field(default_factory=dict)
-    # Transient candidate text for the opt-in topical-relevance check; never stored.
-    evidence_chunks: list[EvidenceChunk] = Field(default_factory=list)
+    # LOCAL-ONLY until the Vault wire contract accepts this field.
+    evidence_chunks: list[EvidenceChunk] = Field(default_factory=list, exclude=True)
 
 
 class OutputClaim(BaseModel):
@@ -532,9 +532,8 @@ class CheckOutputRequest(BaseModel):
     facts: list[FactRef] = Field(default_factory=list)
     output_claims: list[OutputClaim] = Field(default_factory=list)
     current_turn: int = 0
-    # Transient candidate text for the opt-in qualitative output-grounding check;
-    # never stored. Leave empty and no text leaves your process.
-    evidence_chunks: list[EvidenceChunk] = Field(default_factory=list)
+    # LOCAL-ONLY until the Vault wire contract accepts this field.
+    evidence_chunks: list[EvidenceChunk] = Field(default_factory=list, exclude=True)
 
 
 class ChallengeSource(BaseModel):
