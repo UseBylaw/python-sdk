@@ -5,6 +5,16 @@ All notable changes to `bylaw-python` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.8]
+
+### Added
+- `evidence_session(..., goal=...)` and a new optional `user_goal` field on
+  `CheckActionRequest`. When a goal is set for the turn it rides the check-action
+  wire so Vault's opt-in intent-alignment rung can ask whether the tool call actually
+  serves that goal (and flag prompt-injection / hijacked calls). The rung is
+  abstain-only on Vault's side and ignored by an older Vault, so setting or omitting
+  the goal is always safe.
+
 ## [0.5.0]
 
 ### Breaking changes — Bylaw → Bylaw rebrand

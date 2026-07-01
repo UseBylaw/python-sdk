@@ -497,6 +497,12 @@ class CheckActionRequest(BaseModel):
     obligations: list[str] = Field(default_factory=list, exclude=True)
     current_turn: int = 0
     context: dict[str, Any] = Field(default_factory=dict)
+    # The user's/agent's stated goal for this turn (WS-C intent alignment). Optional
+    # and empty by default. When set, Vault's opt-in intent-alignment rung asks whether
+    # this tool call actually serves the goal (and flags prompt-injection / hijacked
+    # calls). Abstain-only on Vault's side and ignored by an older Vault, so it is
+    # always safe to send or omit. Set it per turn via ``evidence_session(goal=...)``.
+    user_goal: str = ""
     # Transient candidate text for the opt-in semantic-grounding / relevance
     # checks. It IS sent to Vault (whose check-action/check-output wire accepts
     # evidence_chunks; an older Vault simply ignores the unknown field) but is
