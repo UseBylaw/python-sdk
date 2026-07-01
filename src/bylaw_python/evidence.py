@@ -41,6 +41,13 @@ ChallengeHandler = Callable[[Challenge], Any]
 _session_ctx: contextvars.ContextVar[tuple[str, str] | None] = contextvars.ContextVar(
     "_bylaw_evidence_session", default=None
 )
+# The user's/agent's stated goal for the current turn (WS-C intent alignment). Empty
+# unless set via ``evidence_session(..., goal=...)``. Forwarded on check-action
+# requests so Vault's opt-in intent-alignment rung can ask whether the tool call
+# actually serves this goal. Abstain-only on the Vault side; omitting it is always safe.
+_goal_ctx: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "_bylaw_evidence_goal", default=""
+)
 _store: SessionEvidenceStore | None = None
 _store_backend: str | None = None
 _challenge_handler: ChallengeHandler | None = None
@@ -124,7 +131,9 @@ def set_session_store(store: SessionEvidenceStore | None) -> None:
 
 
 @contextlib.contextmanager
-def evidence_session(session_id: str, customer_id: str = "") -> Iterator[None]:
+def evidence_session(
+    session_id: str, customer_id: str = "", goal: str = ""
+) -> Iterator[None]:
     """Scope a logical conversation's evidence to a ``(session, customer)`` pair.
 
     Wrap the turn so auto-registered facts and protected actions are attributed
@@ -133,12 +142,23 @@ def evidence_session(session_id: str, customer_id: str = "") -> Iterator[None]:
         with bylaw.evidence_session(session_id="s1", customer_id="cust_42"):
             profile = get_customer_profile(customer_id="cust_42")
             rec = generate_recommendation(customer_id="cust_42")
+
+    Pass ``goal`` to state what the user is trying to accomplish this turn. It is
+    forwarded on protected-action checks so Vault's opt-in intent-alignment rung can
+    ask whether the tool call actually serves that goal (and flag prompt-injection /
+    hijacked calls). The rung is abstain-only on Vault's side, so omitting ``goal`` is
+    always safe — it simply skips goal↔action alignment::
+
+        with bylaw.evidence_session("s1", "cust_42", goal="issue the refund the customer asked for"):
+            refund_payment(customer_id="cust_42", amount=20)
     """
     token = _session_ctx.set((session_id, customer_id))
+    goal_token = _goal_ctx.set(goal or "")
     try:
         yield
     finally:
         _session_ctx.reset(token)
+        _goal_ctx.reset(goal_token)
 
 
 def _active_session(client: BylawClient) -> tuple[str, str]:
@@ -146,6 +166,11 @@ def _active_session(client: BylawClient) -> tuple[str, str]:
     if ctx is not None:
         return ctx
     return (client.config.session_id, "")
+
+
+def _active_goal() -> str:
+    """The stated goal for the current turn, if one was set via evidence_session."""
+    return _goal_ctx.get()
 
 
 def _resolve_customer(
@@ -206,6 +231,7 @@ def _build_action_request(
         facts=[FactRef(fact_id=fid) for fid in fact_ids],
         obligations=obligations,
         context=_threshold_context(rule, tool_args),
+        user_goal=_active_goal(),
     )
     return req, session_id, customer_id
 

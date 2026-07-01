@@ -33,5 +33,6 @@
   "current_turn": 3,
   "context": {
     "channel": "web"
-  }
+  },
+  "user_goal": "update the client's risk tolerance as they requested"
 }

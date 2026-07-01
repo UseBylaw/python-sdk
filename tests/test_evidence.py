@@ -389,6 +389,39 @@ def test_evidence_session_context_overrides_customer():
     assert clearance_body["session_id"] == "sess_X"
 
 
+@respx.mock
+def test_evidence_session_goal_forwarded_on_check_action():
+    """A goal set via evidence_session(goal=...) rides the check-action wire so
+    Vault's intent-alignment rung can use it; without one, user_goal is empty."""
+    bylaw.configure(_config("observe"))
+    respx.post("https://vault.test/v1/evidence/facts").mock(side_effect=_facts_side_effect)
+    check = respx.post("https://vault.test/v1/evidence/check-action").mock(
+        return_value=Response(200, json={"decision": "allow", "reason": "ok", "action_type": "x"})
+    )
+
+    src = EvidenceRule(kind="source", fields={"date_of_birth": "result.dob"}, source_type="profile")
+    act = EvidenceRule(kind="action", action_type="x", requires=("date_of_birth",))
+
+    @enforce(tool_name="get_profile", evidence=src)
+    def get_profile():
+        return {"dob": "1988-05-12"}
+
+    @enforce(tool_name="recommend", evidence=act)
+    def recommend():
+        return "ok"
+
+    with bylaw.evidence_session(session_id="sess_G", customer_id="cust_g", goal="issue the refund the customer asked for"):
+        get_profile()
+        recommend()
+    assert json.loads(check.calls.last.request.content)["user_goal"] == "issue the refund the customer asked for"
+
+    # No goal set ⇒ user_goal is empty (goal↔action alignment is simply skipped).
+    with bylaw.evidence_session(session_id="sess_G2", customer_id="cust_g"):
+        get_profile()
+        recommend()
+    assert json.loads(check.calls.last.request.content)["user_goal"] == ""
+
+
 # ---------------------------------------------------------------------------
 # Direct client methods
 # ---------------------------------------------------------------------------
